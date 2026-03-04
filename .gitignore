@@ -17,6 +17,7 @@ repomix-output_*.xml
 # Local machine / secrets
 mysql_config.json
 notify_state.json
+start_tw_prophet_web.local.bat
 
 # OS / editor
 .DS_Store
