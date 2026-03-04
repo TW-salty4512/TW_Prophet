@@ -1231,3 +1231,17 @@ def index():
 </body>
 </html>"""
     return html
+
+
+if __name__ == "__main__":
+    # ★変更点★ python tw_prophet_web.py 直実行でもWebサーバーを起動できるようにする
+    import uvicorn
+
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(
+        "tw_prophet_web:app",
+        host="0.0.0.0",
+        port=port,
+        reload=False,
+        log_level="info",
+    )

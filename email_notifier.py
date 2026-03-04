@@ -65,7 +65,6 @@ class EmailNotifier:
     def send_notification(self, subject, body, html_mode=False):
         """メール送信
 
-        ★変更点★
         - 送信前に _validate() を必ず実行（設定不備を早期に検知）
         """
         self._validate()
