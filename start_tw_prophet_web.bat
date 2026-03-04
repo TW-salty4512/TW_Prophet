@@ -27,23 +27,20 @@ if not defined SCRIPT_DIR if /I "%USERNAME%"=="tsalt" if exist "%DEV_APP_DIR%run
 rem # CHANGEPOINT fallback to script location
 if not defined SCRIPT_DIR if exist "%~dp0run_web.py" set "SCRIPT_DIR=%~dp0"
 
-rem # CHANGEPOINT fallback to production UNC path on file-server
+rem # CHANGEPOINT fallback to production root path on file-server/local-mapped drive
 if not defined SCRIPT_DIR call :find_prod_app_dir
 if not defined SCRIPT_DIR if defined PROD_APP_DIR set "SCRIPT_DIR=%PROD_APP_DIR%"
 
 if not defined SCRIPT_DIR (
     echo [ERROR] App directory was not resolved.
     echo         Expected dev: "%DEV_APP_DIR%"
-    echo         Expected prod: "\\file-server\...\TW_Prophet\"
+    echo         Expected prod root: "\\file-server\...\TW_Prophet\"
+    echo         or local-mapped root: "C:\...\TW_Prophet\"
     set "EXITCODE=1"
     goto :finish
 )
 
 call :normalize_script_dir
-if not exist "%SCRIPT_DIR%run_web.py" (
-    if exist "%SCRIPT_DIR%project\run_web.py" set "SCRIPT_DIR=%SCRIPT_DIR%project\"
-)
-
 if not exist "%SCRIPT_DIR%run_web.py" (
     echo [ERROR] run_web.py was not found.
     echo         Resolved app dir: "%SCRIPT_DIR%"
@@ -138,8 +135,12 @@ set "EXITCODE=0"
 goto :finish
 
 :find_prod_app_dir
+rem # CHANGEPOINT prefer local mapped production root (e.g. C:\...\TW_Prophet)
+for /d %%D in ("%SystemDrive%\*\TW_Prophet") do (
+    if not defined PROD_APP_DIR if exist "%%~fD\run_web.py" set "PROD_APP_DIR=%%~fD\"
+)
+rem # CHANGEPOINT fallback to UNC production root (e.g. \\file-server\...\TW_Prophet)
 for /d %%D in ("\\file-server\*\TW_Prophet") do (
-    if not defined PROD_APP_DIR if exist "%%~fD\project\run_web.py" set "PROD_APP_DIR=%%~fD\project\"
     if not defined PROD_APP_DIR if exist "%%~fD\run_web.py" set "PROD_APP_DIR=%%~fD\"
 )
 exit /b 0
