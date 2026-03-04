@@ -1,4 +1,4 @@
-"""tw_prophet_web.py
+﻿"""tw_prophet_web.py
 
 TW_Prophet を社内向け Web アプリ(API + 簡易UI)として動かすためのエントリ。
 
@@ -816,17 +816,28 @@ def index():
       align-items:center;
       flex-wrap:wrap;
     }
-    .navlinks a{
-      color:#80FFEA;
+    /* # リンク色の視認性を改善（通常/訪問済み/ホバー/フォーカス） */
+    .navlinks a,
+    .navlinks a:visited{
+      color:#E9FFF8;
       text-decoration:none;
       padding:6px 10px;
       border-radius:999px;
-      border:1px solid rgba(255,255,255,18);
-      background:#1E1E2F;
+      border:1px solid rgba(233,255,248,0.45);
+      background:#243554;
       font-size:13px;
+      font-weight:600;
+      text-shadow:0 1px 0 rgba(0,0,0,0.25);
+      transition:background-color .15s ease,color .15s ease,border-color .15s ease;
     }
     .navlinks a:hover{
-      background:#3A3A4E;
+      color:#FFFFFF;
+      background:#2F4B73;
+      border-color:rgba(255,255,255,0.70);
+    }
+    .navlinks a:focus-visible{
+      outline:2px solid #FFFFFF;
+      outline-offset:2px;
     }
 
     /* wrapを「残り全部」で埋める + gridの行を1frに固定 */
