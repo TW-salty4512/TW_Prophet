@@ -1,0 +1,24 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual env
+.venv/
+venv/
+
+# Model and runtime outputs
+models/
+logs/
+*.pkl
+*.log
+evaluation_results_*.csv
+repomix-output_*.xml
+
+# Local machine / secrets
+mysql_config.json
+notify_state.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
