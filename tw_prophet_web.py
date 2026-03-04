@@ -809,6 +809,19 @@ def index():
       flex:0 0 auto;
     }
 
+    /* # ★変更点★ Web版バージョン表示バッジ */
+    .versionBadge{
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid rgba(233,255,248,0.45);
+      background:#243554;
+      color:#E9FFF8;
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:.04em;
+      white-space:nowrap;
+    }
+
     /* 左上ナビリンク（製造管理/出荷明細） */
     .navlinks{
       display:flex;
@@ -935,6 +948,7 @@ def index():
   <header>
     <div style=\"font-weight:700;\">TW_Prophet Web</div>
     <div class=\"muted\">File-Server常駐版</div>
+    <div class=\"versionBadge\">Ver 3.1.1</div>
 
     <div class=\\"navlinks\\">
       <a href="http://192.168.0.69/manufacturing_control_test/" target=\\"_blank\\" rel=\\"noopener\\">製造管理</a>
