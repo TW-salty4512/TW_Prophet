@@ -39,7 +39,7 @@ class PublicService:
         self.refresh_data()
 
     def refresh_data(self) -> None:
-        # ★変更点★ 実DB再取得ではなく、公開サンプルCSVを再読み込み。
+        # 実DB再取得ではなく、公開サンプルCSVを再読み込み。
         self.shipment_df = self.access_handler.get_shipment_data()
         self.inventory_df = self.access_handler.get_inventory_data()
 
@@ -245,7 +245,7 @@ def api_notify_run():
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    # ★変更点★ 社内リンク/社内文言を除去した公開版UI。
+    # 社内リンク/社内文言を除去した公開版UI。
     return HTMLResponse(
         """
 <!doctype html>

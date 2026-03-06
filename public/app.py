@@ -11,7 +11,7 @@ class TWProphetPublicApp:
         self.port = int(os.getenv("PORT", "8000"))
 
     def run(self) -> None:
-        # ★変更点★ 公開版はデスクトップGUIではなくWeb API/UI起動に統一。
+        # 公開版はデスクトップGUIではなくWeb API/UI起動に統一。
         uvicorn.run("public.tw_prophet_web:app", host=self.host, port=self.port, reload=False, log_level="info")
 
 

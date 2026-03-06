@@ -13,7 +13,7 @@ def main() -> int:
     if use_gui_launcher:
         kwargs["log_config"] = None
 
-    # ★変更点★ 公開版Webエントリを使用。
+    # 公開版Webエントリを使用。
     uvicorn.run(
         "public.tw_prophet_web:app",
         host=os.getenv("TW_WEB_HOST", "0.0.0.0"),

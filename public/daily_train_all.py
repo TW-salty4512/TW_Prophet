@@ -49,7 +49,7 @@ def main() -> int:
         for idx, barcode in enumerate(targets, start=1):
             mode = "weekly" if barcode in weekly_set else "monthly"
             try:
-                # ★変更点★ 公開版はサンプルCSVから学習し、社内DB依存を持たない。
+                # 公開版はサンプルCSVから学習し、社内DB依存を持たない。
                 if mode == "weekly":
                     mh.train_product_model_weekly(shipment, barcode)
                 else:

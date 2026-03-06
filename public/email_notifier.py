@@ -8,7 +8,7 @@ from email.utils import formatdate
 
 class EmailNotifier:
     def __init__(self):
-        # ★変更点★ 公開版の既定は送信無効。明示的に TW_ENABLE_EMAIL=1 のときだけ送信。
+        # 公開版の既定は送信無効。明示的に TW_ENABLE_EMAIL=1 のときだけ送信。
         self.enabled = os.getenv("TW_ENABLE_EMAIL", "0").strip() == "1"
         self.smtp_host = os.getenv("TW_SMTP_HOST", "").strip()
         self.smtp_port = int(os.getenv("TW_SMTP_PORT", "587"))
@@ -46,7 +46,7 @@ class EmailNotifier:
         )
 
     def send_notification(self, subject: str, body: str, html_mode: bool = False) -> bool:
-        # ★変更点★ SMTP未設定時は例外を投げず no-op で False を返す。
+        # SMTP未設定時は例外を投げず no-op で False を返す。
         if not self._can_send():
             return False
 
