@@ -72,7 +72,7 @@ class ModelHandler:
             "is_nov",
             "is_dec",
         ]
-        self.MONTHLY_LEGACY_FEATURE_COLS = [  # ★ 点★ 旧学習済みモデル互換用（年/月/sin/cos + lag + rolling）
+        self.MONTHLY_LEGACY_FEATURE_COLS = [  # 旧学習済みモデル互換用（年/月/sin/cos + lag + rolling）
             "year",
             "month",
             "month_sin",
@@ -873,7 +873,7 @@ class ModelHandler:
         test_weeks: int = 12,
         model_payload: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        # ★ 点★ 週次の評価指標をRMSE/MAE/sMAPEで統一しwalk-forward実装を公開
+        # 週次の評価指標をRMSE/MAE/sMAPEで統一しwalk-forward実装を公開
         weekly = self._prepare_periodic_series(
             shipment_data=shipment_data,
             barcode=barcode,
@@ -895,7 +895,7 @@ class ModelHandler:
         test_months: int = 12,
         model_payload: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        # ★ 点★ 月次の評価指標をRMSE/MAE/sMAPEで統一しwalk-forward実装を公開
+        # 月次の評価指標をRMSE/MAE/sMAPEで統一しwalk-forward実装を公開
         monthly = self._prepare_periodic_series(
             shipment_data=shipment_data,
             barcode=barcode,
@@ -952,7 +952,7 @@ class ModelHandler:
     def _next_period(self, last_ds: pd.Timestamp, mode: str) -> pd.Timestamp:
         if mode == "weekly":
             return pd.to_datetime(last_ds) + pd.Timedelta(days=7)
-        # ★ 点★ pd.offsets.MonthEnd typo回避 + months引数不整合回避
+        # pd.offsets.MonthEnd typo回避 + months引数不整合回避
         return pd.to_datetime(last_ds) + pd.offsets.MonthEnd(1)
 
     def _predict_future_periods(
@@ -1134,7 +1134,7 @@ class ModelHandler:
         return total
 
     def _predict_next_months_monthly(self, shipment_data, barcode, n_months=1):
-        # ★ 点★ 旧実装の「1ステップ予測 × n倍」を修正し、月次を反復予測に統一
+        # 旧実装の「1ステップ予測 × n倍」を修正し、月次を反復予測に統一
         loaded = self._load_model(barcode, model_type="monthly")
         if loaded is None:
             return 0.0
@@ -1353,7 +1353,7 @@ class ModelHandler:
     # Save / Load
     # ======================================================
     def _save_model(self, barcode: str, model, model_type: str = "weekly", meta: Optional[Dict[str, Any]] = None):
-        # ★ 点★ モデル本体に加えて特徴量構成/use_log1p等のメタ情報を保存
+        # モデル本体に加えて特徴量構成/use_log1p等のメタ情報を保存
         payload = {"model": model, "meta": meta or {}}
         joblib.dump(payload, self._model_path(barcode, model_type))
 

@@ -42,7 +42,7 @@ def _select_barcodes(shipment: pd.DataFrame, barcode_col: str, qty_col: str, top
     all_barcodes = totals[barcode_col].tolist()
     n = max(1, min(int(top_n), len(all_barcodes)))
 
-    # ★ 点★ 改修前/改修後比較しやすいように選定方法をCLIで切替可能にした
+    # 改修前/改修後比較しやすいように選定方法をCLIで切替可能にした
     if selection == "random":
         rng = np.random.default_rng(seed)
         idx = rng.choice(len(all_barcodes), size=n, replace=False)
@@ -109,7 +109,7 @@ def main():
         print(f"[{i:03d}/{len(barcodes):03d}] {bc} mode={mode} model_exists={model_exists}")
         try:
             if args.train_missing and (not model_exists):
-                # ★ 点★ モデル未作成バーコードでも即時評価できるように任意学習を追加
+                # モデル未作成バーコードでも即時評価できるように任意学習を追加
                 if mode == "weekly":
                     mh.train_product_model_weekly(shipment, bc)
                 else:

@@ -2,7 +2,7 @@
 
 from public.app import TWProphetPublicApp, TW_prophet, main
 
-# ★ 点★ 社内GUI実装を公開版Web起動実装へ置換。
+# 社内GUI実装を公開版Web起動実装へ置換。
 __all__ = ["TWProphetPublicApp", "TW_prophet", "main"]
 
 

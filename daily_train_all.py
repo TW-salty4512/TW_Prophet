@@ -2,7 +2,7 @@
 
 from public.daily_train_all import main
 
-# ★ 点★ 公開版サンプルデータ学習バッチへ委譲。
+# 公開版サンプルデータ学習バッチへ委譲。
 __all__ = ["main"]
 
 

@@ -2,6 +2,6 @@
 
 from public.tw_prophet_web import app
 
-# ★ 点★ 公開版FastAPIアプリをエクスポート。
+# 公開版FastAPIアプリをエクスポート。
 __all__ = ["app"]
 
