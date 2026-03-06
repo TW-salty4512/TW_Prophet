@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-# ★変更点★ 公開版の設定/データパスを集約し、社内固有パス依存を排除。
+# ★ 点★ 公開版の設定/データパスを集約し、社内固有パス依存を排除。
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SAMPLE_DATA_DIR = PROJECT_ROOT / "examples" / "sample_data"
 DEFAULT_SAMPLE_CONFIG_DIR = PROJECT_ROOT / "examples" / "sample_config"

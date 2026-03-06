@@ -73,7 +73,7 @@ class AccessHandler:
         base_dir = Path(data_dir) if data_dir else config.DATA_DIR
         base_dir.mkdir(parents=True, exist_ok=True)
 
-        # ★変更点★ 公開版ではAccess/MySQL直結を廃止し、サンプルCSVをデータソースに固定。
+        # ★ 点★ 公開版ではAccess/MySQL直結を廃止し、サンプルCSVをデータソースに固定。
         self.sample_handler = SampleDataHandler(
             shipments_csv=Path(shipments_csv) if shipments_csv else config.SHIPMENTS_CSV,
             inventory_csv=Path(inventory_csv) if inventory_csv else config.INVENTORY_CSV,

@@ -72,7 +72,7 @@ class ModelHandler:
             "is_nov",
             "is_dec",
         ]
-        self.MONTHLY_LEGACY_FEATURE_COLS = [  # ★変更点★ 旧学習済みモデル互換用（年/月/sin/cos + lag + rolling）
+        self.MONTHLY_LEGACY_FEATURE_COLS = [  # ★ 点★ 旧学習済みモデル互換用（年/月/sin/cos + lag + rolling）
             "year",
             "month",
             "month_sin",
@@ -236,7 +236,7 @@ class ModelHandler:
         return cols
 
     def _choose_default_feature_cols(self, mode: str, model: Optional[Any]) -> List[str]:
-        # ★変更点★ 既存モデル(feature数)互換: 月次旧15特徴量モデルも扱えるように候補を切替
+        # 既存モデル(feature数)互換: 月次旧15特徴量モデルも扱えるように候補を切替
         if mode == "weekly":
             candidates = [
                 self._weekly_feature_cols(use_customer=False),
@@ -553,7 +553,7 @@ class ModelHandler:
         d["is_nov"] = (d["month"] == 11).astype(int)
         d["is_dec"] = (d["month"] == 12).astype(int)
 
-        # ★変更点★ 月次にも営業日寄与を追加（休日数/稼働日数）
+        # 月次にも営業日寄与を追加（休日数/稼働日数）
         holiday_days = [self._calc_holiday_count_for_month(pd.Timestamp(x)) for x in d["ds"]]
         d["holiday_days"] = np.asarray(holiday_days, dtype=int)
         d["work_days"] = np.maximum(d["ds"].dt.days_in_month - d["holiday_days"], 0).astype(int)
@@ -607,7 +607,7 @@ class ModelHandler:
             if c not in d.columns:
                 d[c] = 0.0
 
-        # ★変更点★ month_colsの年(year)を常に含む（typo対策）
+        # month_colsの年(year)を常に含む（typo対策）
         if "year" not in d.columns:
             d["year"] = d["ds"].dt.year.astype(int)
 
@@ -666,7 +666,7 @@ class ModelHandler:
         self._save_model(barcode, model, "weekly", meta=meta)
 
     def train_product_model_monthly(self, shipment_data: pd.DataFrame, barcode: str):
-        # ★変更点★ 欠損月をasfreq(M)で0埋めし、月次でも一貫した時系列整形を実施
+        # 欠損月をasfreq(M)で0埋めし、月次でも一貫した時系列整形を実施
         monthly = self._prepare_periodic_series(
             shipment_data=shipment_data,
             barcode=barcode,
@@ -873,7 +873,7 @@ class ModelHandler:
         test_weeks: int = 12,
         model_payload: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        # ★変更点★ 週次の評価指標をRMSE/MAE/sMAPEで統一しwalk-forward実装を公開
+        # ★ 点★ 週次の評価指標をRMSE/MAE/sMAPEで統一しwalk-forward実装を公開
         weekly = self._prepare_periodic_series(
             shipment_data=shipment_data,
             barcode=barcode,
@@ -895,7 +895,7 @@ class ModelHandler:
         test_months: int = 12,
         model_payload: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        # ★変更点★ 月次の評価指標をRMSE/MAE/sMAPEで統一しwalk-forward実装を公開
+        # ★ 点★ 月次の評価指標をRMSE/MAE/sMAPEで統一しwalk-forward実装を公開
         monthly = self._prepare_periodic_series(
             shipment_data=shipment_data,
             barcode=barcode,
@@ -952,7 +952,7 @@ class ModelHandler:
     def _next_period(self, last_ds: pd.Timestamp, mode: str) -> pd.Timestamp:
         if mode == "weekly":
             return pd.to_datetime(last_ds) + pd.Timedelta(days=7)
-        # ★変更点★ pd.offsets.MonthEnd typo回避 + months引数不整合回避
+        # ★ 点★ pd.offsets.MonthEnd typo回避 + months引数不整合回避
         return pd.to_datetime(last_ds) + pd.offsets.MonthEnd(1)
 
     def _predict_future_periods(
@@ -1134,7 +1134,7 @@ class ModelHandler:
         return total
 
     def _predict_next_months_monthly(self, shipment_data, barcode, n_months=1):
-        # ★変更点★ 旧実装の「1ステップ予測 × n倍」を修正し、月次を反復予測に統一
+        # ★ 点★ 旧実装の「1ステップ予測 × n倍」を修正し、月次を反復予測に統一
         loaded = self._load_model(barcode, model_type="monthly")
         if loaded is None:
             return 0.0
@@ -1353,7 +1353,7 @@ class ModelHandler:
     # Save / Load
     # ======================================================
     def _save_model(self, barcode: str, model, model_type: str = "weekly", meta: Optional[Dict[str, Any]] = None):
-        # ★変更点★ モデル本体に加えて特徴量構成/use_log1p等のメタ情報を保存
+        # ★ 点★ モデル本体に加えて特徴量構成/use_log1p等のメタ情報を保存
         payload = {"model": model, "meta": meta or {}}
         joblib.dump(payload, self._model_path(barcode, model_type))
 

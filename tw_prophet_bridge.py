@@ -29,7 +29,7 @@ class TWProphetBridge:
         if barcode not in set(self.shipment_data["barcode"].astype(str).tolist()):
             return {"success": False, "error": f"barcode not found: {barcode}"}
 
-        # ★変更点★ 公開版ではローカルサンプルデータを利用し、社内パス依存を排除。
+        # ★ 点★ 公開版ではローカルサンプルデータを利用し、社内パス依存を排除。
         if barcode in self.weekly_set:
             mode = "weekly"
             consumption = self.model_handler.predict_consumption_for_n_months_weekly(self.shipment_data, barcode, n=months)
