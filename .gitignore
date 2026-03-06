@@ -18,7 +18,6 @@ evaluation_results_*.csv
 .env
 .env.*
 !.env.example
-email_list.json
 mysql_config.json
 notify_state.json
 start_tw_prophet_web.local.bat
@@ -27,4 +26,3 @@ start_tw_prophet_web.local.bat
 .DS_Store
 Thumbs.db
 .vscode/
-
