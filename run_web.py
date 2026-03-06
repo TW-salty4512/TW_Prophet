@@ -1,36 +1,11 @@
-"""run_web.py
+"""Public web launcher."""
 
-Launcher for TW_Prophet Web.
+from public.run_web import main
 
-Usage:
-  python run_web.py
-"""
-
-from __future__ import annotations
-
-import os
-import sys
-
-import uvicorn
+# ★変更点★ 公開版Webランチャーへ委譲。
+__all__ = ["main"]
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8000"))
+    raise SystemExit(main())
 
-    # pythonw.exe 実行時は stdout/stderr が None になるため、
-    # uvicorn デフォルトの log_config 初期化エラーを回避する。
-    use_gui_launcher = (getattr(sys, "stdout", None) is None) or (
-        getattr(sys, "stderr", None) is None
-    )
-    uvicorn_kwargs = {}
-    if use_gui_launcher:
-        uvicorn_kwargs["log_config"] = None
-
-    uvicorn.run(
-        "tw_prophet_web:app",
-        host="0.0.0.0",
-        port=port,
-        reload=False,
-        log_level="info",
-        **uvicorn_kwargs,
-    )
