@@ -447,17 +447,22 @@ class SetupWizard(tk.Tk):
 
         if _is_admin():
             # 既に管理者 → 直接実行
+            # -Command でコードページを 65001(UTF-8) に設定してから -File を呼ぶ
+            ps_cmd = (
+                f"chcp 65001 | Out-Null; "
+                f"& '{script}' "
+                f"-Port {self.v_port.get()} "
+                f"-InstallDir '{INSTALL_DIR}' "
+                f"-PythonExe '{python_exe}'"
+            )
             result = subprocess.run(
-                ["powershell", "-ExecutionPolicy", "Bypass",
-                 "-File", str(script),
-                 "-Port", str(self.v_port.get()),
-                 "-InstallDir", str(INSTALL_DIR),
-                 "-PythonExe", python_exe],
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                 "-Command", ps_cmd],
                 capture_output=True,
                 encoding="utf-8", errors="replace",
             )
             if result.returncode != 0:
-                err = (result.stderr or result.stdout or "不明なエラー")[:600]
+                err = (result.stderr or result.stdout or "不明なエラー")[:800]
                 messagebox.showwarning(
                     "自動起動登録の警告",
                     "タスクスケジューラへの登録に失敗しました。\n\n" + err,

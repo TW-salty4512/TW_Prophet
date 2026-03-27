@@ -13,16 +13,17 @@
     管理者権限が必要です。
 #>
 
-# Python (subprocess) からの呼び出し時に文字化けしないよう UTF-8 出力に固定
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding            = [System.Text.Encoding]::UTF8
-
 param(
     [string]$InstallDir  = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
     [string]$PythonExe   = "",   # 空の場合は自動検索
     [int]   $Port        = 8000,
     [string]$TaskName    = "TW_Prophet_Web"
 )
+
+# Python (subprocess) からの呼び出し時に文字化けしないよう UTF-8 出力に固定
+# ※ param() より後に書かないと引数が認識されない
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding            = [System.Text.Encoding]::UTF8
 
 # ---------------------------------------------------------------------------
 # 管理者権限チェック
