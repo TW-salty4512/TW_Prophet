@@ -29,8 +29,15 @@ PROGRAMDATA   = Path(os.environ.get("PROGRAMDATA", "C:/ProgramData"))
 SETTINGS_DIR  = PROGRAMDATA / "TW_Prophet" / "data" / "config"
 SETTINGS_FILE = SETTINGS_DIR / "settings.json"
 
-# インストールディレクトリ（env var > __file__ の親）
-INSTALL_DIR = Path(os.environ.get("TW_PROPHET_DIR", str(Path(__file__).parent)))
+# インストールディレクトリの解決
+# PyInstaller onefile 実行時: __file__ は一時展開フォルダ (_MEI*) を指すため使えない。
+# sys.executable が実際の .exe の場所（インストールディレクトリ）を指す。
+if getattr(sys, 'frozen', False):
+    # PyInstaller バンドル実行
+    INSTALL_DIR = Path(sys.executable).parent
+else:
+    # 通常の python 実行 (env var > __file__ の親)
+    INSTALL_DIR = Path(os.environ.get("TW_PROPHET_DIR", str(Path(__file__).parent)))
 
 MODES = {"internal (MDB/MySQL)": "internal", "sample (サンプルCSV)": "sample"}
 
