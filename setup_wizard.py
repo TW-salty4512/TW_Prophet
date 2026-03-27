@@ -456,14 +456,17 @@ class SetupWizard(tk.Tk):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            # 日本語 Windows のコンソールは cp932。UTF-8 で失敗したら cp932 で再試行
+            # PowerShell の stderr は UTF-16LE (BOM付き) が多い。
+            # utf-16 → cp932 → utf-8 の順で試行。
             def _decode(b: bytes) -> str:
-                for enc in ("utf-8", "cp932", "utf-16"):
+                if not b:
+                    return ""
+                for enc in ("utf-16", "cp932", "utf-8"):
                     try:
                         return b.decode(enc)
                     except Exception:
                         pass
-                return b.decode("utf-8", errors="replace")
+                return b.decode("cp932", errors="replace")
 
             if result.returncode != 0:
                 err = (_decode(result.stderr) or _decode(result.stdout) or "不明なエラー")[:800]
