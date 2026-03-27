@@ -1,0 +1,13 @@
+{
+  "_comment": "このファイルを mysql_config.json にコピーして実際の値を入力してください。",
+  "_comment2": "mysql_config.json は .gitignore で追跡対象外です。",
+  "host": "127.0.0.1",
+  "port": 3306,
+  "user": "your_db_user",
+  "password": "your_db_password",
+  "database": "your_database_name",
+  "table_stock": "stock",
+  "_comment3": "MySQL を使うバーコードと、対応する item_id のマッピング（MySQL連携が不要なら空にしてください）",
+  "mysql_barcodes": [],
+  "mysql_barcodes_item_ids": {}
+}

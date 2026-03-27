@@ -1,0 +1,22 @@
+{
+  "_comment": "このファイルを settings.json にコピーして値を設定してください。",
+  "_comment2": "settings.json は .gitignore で追跡対象外です。",
+  "_comment3": "環境変数が設定されている場合は環境変数が優先されます。",
+
+  "data_mode": "internal",
+  "port": 8000,
+
+  "data_dir":   "C:\\ProgramData\\TW_Prophet\\data",
+  "models_dir": "C:\\ProgramData\\TW_Prophet\\data\\models",
+  "log_dir":    "C:\\ProgramData\\TW_Prophet\\data\\logs",
+  "config_dir": "C:\\ProgramData\\TW_Prophet\\data\\config",
+
+  "mdb_base_dir":       "\\\\File-server\\データベース",
+  "shipment_mdb":       "\\\\File-server\\データベース\\簡易受注管理.mdb",
+  "post_shipment_mdb":  "\\\\File-server\\データベース\\出荷管理.mdb",
+  "manufacture_mdb":    "\\\\File-server\\データベース\\製造管理.mdb",
+
+  "allow_web_train":     false,
+  "notify_auto":         true,
+  "notify_interval_min": 360
+}

@@ -1,86 +1,217 @@
-# TW_Prophet (Public Edition)
+# TW_Prophet
 
-TW_Prophet の公開版です。  
-公開版には、時系列予測・在庫予測・部品枯渇予測ロジックを残し、社内機密（社名、実サーバー、実DB、実メール送信先、実運用データ）は含めていません。
+AI 需要予測 & 部品在庫アラート Web サービス。
 
-## できること
+XGBoost ベースの時系列予測で製品の月次/週次需要を予測し、
+部品在庫の枯渇タイミングをブラウザから確認できます。
 
-- 出荷実績から製品ごとの需要予測（`model_handler.py`）
-- 在庫と予測消費量を使った残日数算出
-- 部品在庫の枯渇アラート算出
-- FastAPI の簡易 Web UI で可視化
+---
 
-## 公開版で除外しているもの
+## 目次
 
-- 実DB接続（Access / MySQL）
-- 社内メール送信先リスト
-- 社内URL / 社内IP / UNCパス
-- 社内運用向け JSON / バッチ常駐前提設定
+1. [機能概要](#機能概要)
+2. [ディレクトリ構成](#ディレクトリ構成)
+3. [動作モード](#動作モード)
+4. [クイックスタート（サンプルモード）](#クイックスタート)
+5. [社内導入（internal モード）](#社内導入)
+6. [設定リファレンス](#設定リファレンス)
+7. [Windows 自動起動](#windows-自動起動)
+8. [インストーラビルド](#インストーラビルド)
+9. [テスト実行](#テスト実行)
+10. [開発・貢献](#開発貢献)
 
-## ディレクトリ構成（主要）
+---
 
-- `public/` : 公開版アプリ実装
-- `examples/sample_data/` : サンプル CSV（出荷・在庫・部品）
-- `examples/sample_config/` : サンプル設定 JSON
-- `model_handler.py` : 予測ロジック本体（再利用）
-- `public_main.py` : 公開版起動エントリ
+## 機能概要
 
-## 前提環境
+- 出荷実績から製品ごとの月次/週次需要予測（XGBoost）
+- 在庫残日数 / 残月数のリアルタイム計算
+- 部品在庫枯渇アラート（メール通知）
+- FastAPI + シングルページ Web UI
+- Access MDB / MySQL / サンプル CSV を切り替え可能
 
-- Python 3.9 以上
-- Anaconda 環境を推奨
+---
 
-## セットアップ
+## ディレクトリ構成
+
+```
+project/
+├── config.py                  # 集中設定（全パス/資格情報はここ経由）
+├── tw_prophet_web.py          # Web エントリーポイント
+├── model_handler.py           # 予測ロジック（XGBoost）
+├── access_handler.py          # MDB/MySQL データ取得（internal モード）
+├── email_notifier.py          # メール通知
+├── tw_prophet_bridge.py       # PHP ブリッジ
+├── setup_wizard.py            # 初回設定ウィザード（Tkinter）
+├── run_web.py                 # uvicorn 起動スクリプト
+│
+├── api/
+│   ├── service.py             # TWProphetWebService（サービス層）
+│   └── routes.py              # FastAPI ルーター + HTML
+│
+├── model/
+│   ├── __init__.py
+│   └── store.py               # モデル保存/読み込み
+│
+├── public/                    # sample モード / 公開版
+│   ├── config.py
+│   ├── access_handler.py      # CSV ベースハンドラ
+│   └── tw_prophet_web.py      # 公開版 Web
+│
+├── examples/
+│   ├── sample_data/           # サンプル CSV
+│   └── sample_config/         # サンプル設定 JSON
+│
+├── scripts/
+│   ├── register_startup.ps1   # タスクスケジューラ登録
+│   ├── unregister_startup.ps1 # タスクスケジューラ解除
+│   └── start_service.bat      # 手動起動バッチ
+│
+├── installer/
+│   └── tw_prophet.iss         # Inno Setup インストーラ定義
+│
+├── tests/                     # pytest テスト
+├── docs/                      # 運用ドキュメント
+│
+├── settings.example.json      # 設定テンプレート
+├── .env.example               # 環境変数テンプレート
+└── mysql_config.example.json  # MySQL 設定テンプレート
+```
+
+---
+
+## 動作モード
+
+| モード | データソース | 用途 |
+|--------|-------------|------|
+| `internal` | Access MDB + MySQL | 社内本番運用 |
+| `sample` | examples/sample_data/ の CSV | デモ・開発・公開 |
+
+`TW_DATA_MODE=sample` または `settings.json` の `"data_mode": "sample"` で切替。
+
+---
+
+## クイックスタート
+
+サンプル CSV を使ったデモ起動:
 
 ```bash
+# 1. 依存パッケージをインストール
 pip install -r requirements.txt
+
+# 2. sample モードで起動
+TW_DATA_MODE=sample python tw_prophet_web.py
+
+# 3. ブラウザで開く
+# http://localhost:8000
 ```
 
-必要に応じて `.env.example` を `.env` にコピーし、データパスなどを変更してください。
+---
 
-## 実行方法
+## 社内導入
 
-### Web アプリ起動
+詳細は [docs/installation.md](docs/installation.md) を参照してください。
 
-```bash
-python public_main.py
-```
+### 最小手順
 
-または
+```powershell
+# 1. 仮想環境を作成
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 
-```bash
+# 2. セットアップウィザードで設定
+python setup_wizard.py
+
+# 3. 起動確認
 python run_web.py
 ```
 
-ブラウザで `http://localhost:8000` を開きます。
+設定は `%ProgramData%\TW_Prophet\settings.json` に保存されます。
 
-### 全製品学習バッチ
+---
 
-```bash
-python daily_train_all.py
+## 設定リファレンス
+
+主要な環境変数（`.env.example` 参照）:
+
+| 変数 | 既定値 | 説明 |
+|------|--------|------|
+| `TW_DATA_MODE` | `internal` | `internal` / `sample` |
+| `PORT` | `8000` | Web サーバーポート |
+| `TW_MDB_BASE_DIR` | `\\File-server\データベース` | MDB の UNC ベースパス |
+| `MYSQL_HOST` | `127.0.0.1` | MySQL ホスト |
+| `MYSQL_DATABASE` | `` | MySQL データベース名 |
+| `TW_PROPHET_ALLOW_WEB_TRAIN` | `0` | Web から学習を許可 |
+| `TW_PROPHET_NOTIFY_AUTO` | `1` | 部品在庫自動通知 |
+
+ナビリンクは `settings.json` の `nav_links` で設定:
+```json
+{
+  "nav_links": [
+    {"label": "製造管理", "url": "http://intranet/mfg/"},
+    {"label": "出荷明細", "url": "http://intranet/shipments/"}
+  ]
+}
 ```
 
-## 自社データに差し替える箇所
+---
 
-1. `examples/sample_data/shipments.csv`  
-   必須列: `shipment_date`, `barcode`, `quantity`（任意: `customer_id`）
-2. `examples/sample_data/inventory.csv`  
-   必須列: `barcode`, `inventory`
-3. `examples/sample_data/parts.csv`  
-   必須列: `barcode`, `part_name`, `stock`
-4. `examples/sample_config/sample_excluded_products.json`
-5. `examples/sample_config/sample_weekly_data_list.json`
+## Windows 自動起動
 
-環境変数でファイルパスを切り替える場合は `.env.example` の `TW_SAMPLE_*` / `TW_*_JSON` を利用します。
+```powershell
+# 管理者権限で実行
+.\scripts\register_startup.ps1 -Port 8000
 
-## メール通知について
+# 解除
+.\scripts\unregister_startup.ps1
+```
 
-- 公開版ではデフォルト無効（`TW_ENABLE_EMAIL=0`）。
-- SMTP 設定を与えた場合のみ送信します。
-- 実送信先リスト（`email_list.json`）は公開物に含めません。
+タスクスケジューラ（SYSTEM アカウント）で `At Startup` に登録します。
+ログイン不要で PC 起動時に自動起動します。
 
-## ライセンス
+---
 
-`LICENSE` は MIT テンプレートです。  
-公開前に組織ポリシーに合わせて最終確認してください。
+## インストーラビルド
 
+[Inno Setup 6](https://jrsoftware.org/isinfo.php) をインストール後:
+
+1. `installer/tw_prophet.iss` を Inno Setup で開く
+2. \[Build\] → \[Compile\]
+3. `installer/Output/TW_Prophet_Setup_x.x.x.exe` が生成される
+
+インストーラが行うこと:
+- ファイルのコピー
+- `%ProgramData%\TW_Prophet\` ディレクトリの作成
+- `settings.example.json` から `settings.json` を自動生成
+- タスクスケジューラへの自動起動登録（オプション）
+- セットアップウィザードの起動（オプション）
+
+---
+
+## テスト実行
+
+```bash
+cd project
+pip install pytest
+pytest tests/ -v
+```
+
+サンプルモードのみテスト:
+```bash
+TW_DATA_MODE=sample pytest tests/test_sample_mode.py -v
+```
+
+---
+
+## 開発・貢献
+
+- `project/` が単一の正本です
+- `master/` および `TW_Prophet_public/` は廃止予定です
+- 機密情報（IP, パスワード, UNCパス）のコードへのハードコードは禁止です
+- すべての設定は `config.py` 経由で解決してください
+
+### セキュリティに関する注意
+
+過去のコミット履歴に機密情報が含まれている可能性があります。
+詳細は [docs/security_remediation.md](docs/security_remediation.md) を参照してください。

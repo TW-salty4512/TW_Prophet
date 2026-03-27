@@ -1,28 +1,55 @@
 # Python cache
 __pycache__/
 *.py[cod]
+*.pyo
 
 # Virtual env
 .venv/
 venv/
 env/
 
-# Runtime outputs
+# Runtime outputs (generated at runtime, not source)
 models/
 logs/
 *.pkl
 *.log
 evaluation_results_*.csv
 
-# Local secrets / private runtime files
+# ----------------------------------------------------------------
+# 機密・個人情報・ローカル固有の設定ファイル（追跡対象外）
+# ----------------------------------------------------------------
+# 環境変数 / シークレット
 .env
 .env.*
 !.env.example
-mysql_config.json
-notify_state.json
-start_tw_prophet_web.local.bat
 
-# OS / editor
+# DB 接続情報（例: mysql_config.example.json は追跡対象）
+mysql_config.json
+
+# アプリ設定（例: settings.example.json は追跡対象）
+settings.json
+
+# 通知状態（ランタイム状態）
+notify_state.json
+
+# 運用時に書き換えるランタイム JSON（テンプレートは examples/ に置く）
+email_list.json
+excluded_products.json
+notify_settings.json
+weekly_data_list.json
+
+# ローカル開発用バッチ（個人パスが入る可能性）
+*.local.bat
+*.local.ps1
+
+# 個人パス(prefix)を含む conda バックアップ（environment.yml に置き換え済み）
+Prophet_backup.yml
+
+# ----------------------------------------------------------------
+# OS / エディタ
+# ----------------------------------------------------------------
 .DS_Store
 Thumbs.db
 .vscode/
+*.swp
+*.swo

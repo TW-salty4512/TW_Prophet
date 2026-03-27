@@ -1,9 +1,17 @@
 """
-#################################################
-# 2025/02
-# -TW_Prophet-
-# model_handler.py
-#################################################
+model_handler.py  –  TW_Prophet 予測エンジン（ModelHandler）
+
+依存サブモジュール（model/ パッケージ）:
+  model/calendar.py   – 祝日・営業日カレンダー
+  model/metrics.py    – smape / calc_metrics
+  model/transforms.py – log1p変換・外れ値クリップ・safe_array
+  model/features.py   – 特徴量エンジニアリング
+  model/trainer.py    – XGBoost 学習・ハイパーパラメータ探索
+  model/evaluator.py  – WalkForwardResult
+  model/store.py      – モデル保存/読み込み
+
+このファイルは後方互換を維持するファサードです。
+メソッド内部は上記モジュールの関数に段階的に委譲しています。
 """
 import os
 import warnings
@@ -21,10 +29,32 @@ from xgboost import XGBRegressor
 
 import matplotlib as mpl
 
+# ---- model/ サブモジュールをインポート ----
+from model.metrics import smape as _smape_impl, calc_metrics as _calc_metrics_impl
+from model.transforms import (
+    clip_upper_outliers as _clip_upper_outliers_impl,
+    should_use_log_transform as _should_use_log_transform_impl,
+    transform_target as _transform_target_impl,
+    inverse_target as _inverse_target_impl,
+    safe_array as _safe_array_impl,
+)
+from model.calendar import (
+    is_holiday as _is_holiday_impl,
+    holiday_count_for_week as _holiday_week_impl,
+    holiday_count_for_month as _holiday_month_impl,
+)
+from model.trainer import (
+    default_xgb as _default_xgb_impl,
+    fit_estimator as _fit_estimator_impl,
+    search_best_xgb as _search_best_xgb_impl,
+)
+from model.store import save_model as _save_model_impl, load_model as _load_model_impl
+
 mpl.rc("font", family="MS Gothic")
 warnings.filterwarnings("ignore")
 
 
+# モジュールレベルで後方互換エイリアスとして公開
 def smape(y_true, y_pred):
     y_true_arr = np.asarray(y_true, dtype=float)
     y_pred_arr = np.asarray(y_pred, dtype=float)
@@ -257,43 +287,19 @@ class ModelHandler:
         return list(candidates[0])
 
     def _safe_array(self, X: Any) -> np.ndarray:
-        arr = np.asarray(X, dtype=float)
-        # 予測時/学習時のNaN/inf混入を一律除去してXGBoost破綻を防止
-        return np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
+        return _safe_array_impl(X)
 
     def _clip_upper_outliers(self, y: pd.Series) -> pd.Series:
-        # 外れ値処理の統一: IQR上限クリップ(下限は0のみ)
-        s = pd.to_numeric(y, errors="coerce").fillna(0.0).clip(lower=0.0)
-        if len(s) == 0:
-            return s
-        q1, q3 = s.quantile([0.25, 0.75])
-        iqr = max(float(q3 - q1), 1e-6)
-        upper = float(q3 + self.OUTLIER_IQR_MULTIPLIER * iqr)
-        return s.clip(upper=max(0.0, upper))
+        return _clip_upper_outliers_impl(y, iqr_multiplier=self.OUTLIER_IQR_MULTIPLIER)
 
     def _should_use_log_transform(self, y_raw: np.ndarray) -> bool:
-        # 歪みが強い系列のみlog1p学習を有効化（全件強制はしない）
-        y = np.asarray(y_raw, dtype=float)
-        if len(y) < 12:
-            return False
-        if np.any(y < 0):
-            return False
-        if np.nanmax(y) < 10:
-            return False
-        skew = pd.Series(y).skew()
-        return bool(np.isfinite(skew) and skew > 1.0)
+        return _should_use_log_transform_impl(y_raw)
 
     def _transform_target(self, y_raw: np.ndarray, use_log1p: bool) -> np.ndarray:
-        y = np.asarray(y_raw, dtype=float)
-        if use_log1p:
-            return np.log1p(np.clip(y, 0.0, None))
-        return y
+        return _transform_target_impl(y_raw, use_log1p)
 
     def _inverse_target(self, y_model: np.ndarray, use_log1p: bool) -> np.ndarray:
-        y = np.asarray(y_model, dtype=float)
-        if use_log1p:
-            y = np.expm1(y)
-        return np.clip(y, 0.0, None)
+        return _inverse_target_impl(y_model, use_log1p)
 
     def _safe_predict(self, model: Any, X: Any, use_log1p: bool = False) -> np.ndarray:
         X_safe = self._safe_array(X)
@@ -301,13 +307,7 @@ class ModelHandler:
         return self._inverse_target(y_model, use_log1p=use_log1p)
 
     def _calc_metrics(self, y_true: Any, y_pred: Any) -> Dict[str, float]:
-        y_true_arr = np.asarray(y_true, dtype=float)
-        y_pred_arr = np.asarray(y_pred, dtype=float)
-        return {
-            "rmse": float(np.sqrt(mean_squared_error(y_true_arr, y_pred_arr))),
-            "mae": float(mean_absolute_error(y_true_arr, y_pred_arr)),
-            "smape": float(smape(y_true_arr, y_pred_arr)),
-        }
+        return _calc_metrics_impl(y_true, y_pred)
 
     def _model_path(self, barcode: str, model_type: str) -> str:
         return os.path.join(self.model_dir, f"{model_type}_{barcode}.pkl")
@@ -334,107 +334,18 @@ class ModelHandler:
         return model, meta
 
     def _default_xgb_for_mode(self, mode: str, **params) -> XGBRegressor:
-        base_params = {
-            "objective": "reg:squarederror",
-            "random_state": 42,
-            "n_jobs": -1,
-        }
-        if mode == "weekly":
-            base_params.update(
-                {
-                    "n_estimators": 300,
-                    "max_depth": 4,
-                    "learning_rate": 0.05,
-                    "subsample": 0.9,
-                    "colsample_bytree": 0.8,
-                    "min_child_weight": 3,
-                    "reg_alpha": 0.0,
-                    "reg_lambda": 1.0,
-                }
-            )
-        else:
-            base_params.update(
-                {
-                    "n_estimators": 250,
-                    "max_depth": 4,
-                    "learning_rate": 0.05,
-                    "subsample": 0.9,
-                    "colsample_bytree": 0.8,
-                    "min_child_weight": 2,
-                    "reg_alpha": 0.0,
-                    "reg_lambda": 1.0,
-                }
-            )
-        base_params.update(params)
-        return XGBRegressor(**base_params)
+        return _default_xgb_impl(mode, **params)
 
     def _fit_estimator(self, estimator: Any, X: np.ndarray, y: np.ndarray) -> Any:
-        X_safe = self._safe_array(X)
-        y_arr = np.asarray(y, dtype=float)
-        if isinstance(estimator, XGBRegressor):
-            # 可能な場合のみearly stoppingを試行（失敗時は通常fitにフォールバック）
-            val_size = max(4, int(len(X_safe) * 0.15))
-            if len(X_safe) - val_size >= 8:
-                X_tr, X_val = X_safe[:-val_size], X_safe[-val_size:]
-                y_tr, y_val = y_arr[:-val_size], y_arr[-val_size:]
-                try:
-                    estimator.fit(
-                        X_tr,
-                        y_tr,
-                        eval_set=[(X_val, y_val)],
-                        verbose=False,
-                        early_stopping_rounds=20,
-                    )
-                    return estimator
-                except Exception:
-                    pass
-        estimator.fit(X_safe, y_arr)
-        return estimator
+        return _fit_estimator_impl(estimator, X, y)
 
     def _xgb_param_dist(self, mode: str) -> Dict[str, List[Any]]:
-        if mode == "weekly":
-            return {
-                "n_estimators": [100, 200, 300, 500],
-                "max_depth": [2, 3, 4, 5, 6, 8],
-                "learning_rate": [0.01, 0.03, 0.05, 0.1],
-                "subsample": [0.7, 0.8, 0.9, 1.0],
-                "colsample_bytree": [0.6, 0.8, 1.0],
-                "min_child_weight": [1, 3, 5, 7],
-                "reg_alpha": [0.0, 0.1, 0.5, 1.0],
-                "reg_lambda": [0.5, 1.0, 2.0],
-            }
-        return {
-            "n_estimators": [100, 200, 300, 500],
-            "max_depth": [2, 3, 4, 5, 6],
-            "learning_rate": [0.01, 0.03, 0.05, 0.1],
-            "subsample": [0.7, 0.8, 0.9, 1.0],
-            "colsample_bytree": [0.6, 0.8, 1.0],
-            "min_child_weight": [1, 3, 5],
-            "reg_alpha": [0.0, 0.1, 0.5],
-            "reg_lambda": [0.5, 1.0, 2.0],
-        }
+        # 後方互換のために残す（内部では trainer.py の実装を使用）
+        from model.trainer import _param_dist
+        return _param_dist(mode)
 
     def _search_best_xgb(self, mode: str, X: np.ndarray, y: np.ndarray) -> Tuple[XGBRegressor, Dict[str, Any]]:
-        n_splits = min(4, max(2, len(X) // (20 if mode == "weekly" else 12)))
-        tscv = TimeSeriesSplit(n_splits=n_splits)
-        n_iter = 25 if mode == "weekly" else 24
-
-        search = RandomizedSearchCV(
-            estimator=self._default_xgb_for_mode(mode),
-            param_distributions=self._xgb_param_dist(mode),
-            n_iter=n_iter,
-            scoring="neg_root_mean_squared_error",
-            cv=tscv,
-            n_jobs=-1,
-            random_state=42,
-            verbose=0,
-        )
-        search.fit(self._safe_array(X), np.asarray(y, dtype=float))
-        best_params = dict(search.best_params_)
-
-        best = self._default_xgb_for_mode(mode, **best_params)
-        best = self._fit_estimator(best, X, y)
-        return best, best_params
+        return _search_best_xgb_impl(mode, X, y)
 
     # ======================================================
     # Data Prep
@@ -1315,48 +1226,21 @@ class ModelHandler:
     # Holiday / Working-day helpers
     # ======================================================
     def _calc_holiday_count_for_week(self, week_start):
-        count = 0
-        for i in range(7):
-            current_day = week_start + pd.Timedelta(days=i)
-            if self._is_holiday(current_day):
-                count += 1
-        return count
+        return _holiday_week_impl(week_start)
 
     def _calc_holiday_count_for_month(self, month_end):
-        start_of_month = (month_end - pd.offsets.MonthEnd(1)) + pd.Timedelta(days=1)
-        end_of_month = month_end
-        count = 0
-        current_day = start_of_month
-        while current_day <= end_of_month:
-            if self._is_holiday(current_day):
-                count += 1
-            current_day += pd.Timedelta(days=1)
-        return count
+        return _holiday_month_impl(month_end)
 
     def _is_holiday(self, day):
-        weekday = day.weekday()
-        if weekday >= 5:
-            return True
-
-        mm = day.month
-        dd = day.day
-
-        if mm == 8 and (13 <= dd <= 15):
-            return True
-
-        if (mm == 12 and dd >= 29) or (mm == 1 and dd <= 3):
-            return True
-
-        return False
+        return _is_holiday_impl(day)
 
     # ======================================================
     # Save / Load
+    # NOTE: model/store.py に同等のスタンドアロン実装あり。
+    #       段階的な分割計画: model/ パッケージへ移行予定。
     # ======================================================
     def _save_model(self, barcode: str, model, model_type: str = "weekly", meta: Optional[Dict[str, Any]] = None):
-        # モデル本体に加えて特徴量構成/use_log1p等のメタ情報を保存
-        payload = {"model": model, "meta": meta or {}}
-        joblib.dump(payload, self._model_path(barcode, model_type))
+        _save_model_impl(self.model_dir, barcode, model, model_type=model_type, meta=meta)
 
     def _load_model(self, barcode: str, model_type: str = "weekly"):
-        path = self._model_path(barcode, model_type)
-        return joblib.load(path) if os.path.exists(path) else None
+        return _load_model_impl(self.model_dir, barcode, model_type=model_type)
