@@ -56,7 +56,15 @@ def _is_admin() -> bool:
 
 
 def _default_python_exe() -> str:
-    """既存 settings.json → .venv → PATH の順で python/pythonw を探す。"""
+    """サービス起動に使う実行ファイルパスを返す。
+    PyInstaller バンドル実行時は TW_Prophet_Web.exe を優先する。
+    """
+    # PyInstaller バンドル実行時: 同じフォルダの TW_Prophet_Web.exe を使う
+    if getattr(sys, 'frozen', False):
+        web_exe = INSTALL_DIR / "TW_Prophet_Web.exe"
+        if web_exe.exists():
+            return str(web_exe)
+
     # 1. settings.json に保存済みパス
     if SETTINGS_FILE.exists():
         try:
@@ -445,12 +453,14 @@ class SetupWizard(tk.Tk):
                  "-Port", str(self.v_port.get()),
                  "-InstallDir", str(INSTALL_DIR),
                  "-PythonExe", python_exe],
-                capture_output=True, text=True,
+                capture_output=True,
+                encoding="utf-8", errors="replace",
             )
             if result.returncode != 0:
+                err = (result.stderr or result.stdout or "不明なエラー")[:600]
                 messagebox.showwarning(
                     "自動起動登録の警告",
-                    "タスクスケジューラへの登録に失敗しました。\n\n" + result.stderr[:500],
+                    "タスクスケジューラへの登録に失敗しました。\n\n" + err,
                 )
             else:
                 messagebox.showinfo("自動起動", "タスクスケジューラへの登録が完了しました。")
