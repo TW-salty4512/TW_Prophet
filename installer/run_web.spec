@@ -14,12 +14,18 @@ ROOT = Path(SPECPATH).parent  # project/
 
 # conda 環境では libffi (ffi-8.dll など) が Library\bin にある
 # PyInstaller が自動収集しないため明示的にバンドルする
-def _collect_ffi_dlls():
+def _collect_extra_dlls():
+    """Collect DLLs that PyInstaller misses from conda envs."""
     env = Path(sys.executable).parent
     candidates = []
-    for search_dir in [env / 'DLLs', env / 'Library' / 'bin', env]:
+    patterns = {
+        env / 'DLLs': ['ffi*.dll', 'libffi*.dll', '_ctypes*.pyd', 'pyexpat*.pyd'],
+        env / 'Library' / 'bin': ['ffi*.dll', 'libffi*.dll', 'libexpat*.dll', 'expat*.dll'],
+        env: ['ffi*.dll'],
+    }
+    for search_dir, pats in patterns.items():
         if search_dir.exists():
-            for pat in ['ffi*.dll', 'libffi*.dll', '_ctypes*.pyd']:
+            for pat in pats:
                 for f in search_dir.glob(pat):
                     candidates.append((str(f), '.'))
     return candidates
@@ -27,7 +33,7 @@ def _collect_ffi_dlls():
 a = Analysis(
     [str(ROOT / 'run_web.py')],
     pathex=[str(ROOT)],
-    binaries=_collect_ffi_dlls(),
+    binaries=_collect_extra_dlls(),
     datas=[
         # サンプルデータ・静的ファイル
         (str(ROOT / 'examples'), 'examples'),
@@ -99,7 +105,6 @@ a = Analysis(
     excludes=[
         # 不要な大型パッケージを除外してサイズ削減
         'tkinter',
-        'matplotlib',
         'IPython',
         'jupyter',
         'notebook',
