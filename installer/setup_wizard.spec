@@ -7,34 +7,52 @@
 #
 # 出力: installer\dist\TW_Prophet_Setup_Wizard.exe
 
-import glob
 import sys
 from pathlib import Path
 
 ROOT = Path(SPECPATH).parent  # project/
 
-# conda 環境では libffi (ffi-8.dll など) が Library\bin にある
-# PyInstaller が自動収集しないため明示的にバンドルする
-def _collect_ffi_dlls():
+# conda 環境では libffi・_tkinter・tcl/tk DLL が Library\bin や DLLs にある。
+# PyInstaller が自動収集しないため明示的にバンドルする。
+def _collect_conda_dlls():
     env = Path(sys.executable).parent
-    candidates = []
+    bins = []
     for search_dir in [env / 'DLLs', env / 'Library' / 'bin', env]:
-        if search_dir.exists():
-            for pat in ['ffi*.dll', 'libffi*.dll', '_ctypes*.pyd']:
-                for f in search_dir.glob(pat):
-                    candidates.append((str(f), '.'))
-    return candidates
+        if not search_dir.exists():
+            continue
+        for pat in [
+            'ffi*.dll', 'libffi*.dll', '_ctypes*.pyd',   # ctypes
+            '_tkinter*.pyd', 'tcl8*.dll', 'tk8*.dll',    # tkinter
+            'tcl86*.dll', 'tk86*.dll',
+        ]:
+            for f in search_dir.glob(pat):
+                bins.append((str(f), '.'))
+    return bins
+
+def _collect_tcl_data():
+    """tcl8.6 / tk8.6 ライブラリデータを datas に追加する。"""
+    env = Path(sys.executable).parent
+    datas = []
+    lib_dir = env / 'Library' / 'lib'
+    if not lib_dir.exists():
+        lib_dir = env / 'lib'
+    for name in ('tcl8.6', 'tk8.6'):
+        d = lib_dir / name
+        if d.exists():
+            datas.append((str(d), name))
+    return datas
 
 a = Analysis(
     [str(ROOT / 'setup_wizard.py')],
     pathex=[str(ROOT)],
-    binaries=_collect_ffi_dlls(),
-    datas=[],
+    binaries=_collect_conda_dlls(),
+    datas=_collect_tcl_data(),
     hiddenimports=[
         'tkinter',
         'tkinter.filedialog',
         'tkinter.messagebox',
         'tkinter.ttk',
+        '_tkinter',
     ],
     hookspath=[],
     hooksconfig={},
@@ -59,7 +77,7 @@ exe = EXE(
     debug=False,
     strip=False,
     upx=False,
-    console=False,      # Tkinter GUI なのでコンソール不要
+    console=False,
     icon=str(ROOT / 'icon.ico') if (ROOT / 'icon.ico').exists() else None,
     version=None,
 )
