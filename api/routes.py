@@ -9,9 +9,13 @@ from __future__ import annotations
 from io import BytesIO
 from typing import Any
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 import config
 from api.service import TWProphetWebService
@@ -106,6 +110,7 @@ def backtest_plot(barcode: str) -> StreamingResponse:
     try:
         buf: BytesIO = _s().backtest_png(barcode)
     except Exception as e:
+        logger.warning("[backtest_plot] %s: %s", barcode, e)
         raise HTTPException(status_code=400, detail=str(e))
     return StreamingResponse(buf, media_type="image/png")
 

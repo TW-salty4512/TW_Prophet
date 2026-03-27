@@ -2,7 +2,7 @@
 setup_wizard.py  –  TW_Prophet セットアップウィザード（Tkinter GUI）
 
 初回インストール後またはインストーラから呼び出す。
-設定内容を %ProgramData%\TW_Prophet\settings.json に書き込む。
+設定内容を %ProgramData%\TW_Prophet\data\config\settings.json に書き込む。
 必要に応じてタスクスケジューラへの登録も行う。
 
 使い方:
@@ -10,6 +10,7 @@ setup_wizard.py  –  TW_Prophet セットアップウィザード（Tkinter GUI
 """
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import subprocess
@@ -24,9 +25,12 @@ from typing import Any
 # ---------------------------------------------------------------------------
 APP_TITLE   = "TW_Prophet セットアップウィザード"
 TASK_NAME   = "TW_Prophet_Web"
-PROGRAMDATA = Path(os.environ.get("PROGRAMDATA", "C:/ProgramData"))
-SETTINGS_DIR  = PROGRAMDATA / "TW_Prophet"
+PROGRAMDATA   = Path(os.environ.get("PROGRAMDATA", "C:/ProgramData"))
+SETTINGS_DIR  = PROGRAMDATA / "TW_Prophet" / "data" / "config"
 SETTINGS_FILE = SETTINGS_DIR / "settings.json"
+
+# インストールディレクトリ（env var > __file__ の親）
+INSTALL_DIR = Path(os.environ.get("TW_PROPHET_DIR", str(Path(__file__).parent)))
 
 MODES = {"internal (MDB/MySQL)": "internal", "sample (サンプルCSV)": "sample"}
 
@@ -37,6 +41,38 @@ COLOR_BUTTON = "#1565C0"
 COLOR_OK     = "#388E3C"
 
 
+def _is_admin() -> bool:
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+    except Exception:
+        return False
+
+
+def _default_python_exe() -> str:
+    """既存 settings.json → .venv → PATH の順で python/pythonw を探す。"""
+    # 1. settings.json に保存済みパス
+    if SETTINGS_FILE.exists():
+        try:
+            s = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+            p = s.get("python_exe", "")
+            if p and Path(p).exists():
+                return p
+        except Exception:
+            pass
+    # 2. インストールディレクトリの仮想環境
+    for rel in (".venv/Scripts/pythonw.exe", ".venv/Scripts/python.exe",
+                "venv/Scripts/pythonw.exe",  "venv/Scripts/python.exe"):
+        c = INSTALL_DIR / rel
+        if c.exists():
+            return str(c)
+    # 3. 現在の Python 実行ファイル（pythonw.exe があれば）
+    exe = Path(sys.executable)
+    pw = exe.parent / "pythonw.exe"
+    if pw.exists():
+        return str(pw)
+    return str(exe)
+
+
 # ---------------------------------------------------------------------------
 # ウィザード
 # ---------------------------------------------------------------------------
@@ -45,7 +81,7 @@ class SetupWizard(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("720x600")
+        self.geometry("720x640")
         self.configure(bg=COLOR_BG)
         self.resizable(False, False)
 
@@ -61,8 +97,9 @@ class SetupWizard(tk.Tk):
         self.v_mysql_user     = tk.StringVar(value="")
         self.v_mysql_password = tk.StringVar(value="")
         self.v_mysql_database = tk.StringVar(value="")
-        self.v_data_dir       = tk.StringVar(value=str(SETTINGS_DIR / "data"))
-        self.v_models_dir     = tk.StringVar(value=str(SETTINGS_DIR / "data" / "models"))
+        self.v_data_dir       = tk.StringVar(value=str(PROGRAMDATA / "TW_Prophet" / "data"))
+        self.v_models_dir     = tk.StringVar(value=str(PROGRAMDATA / "TW_Prophet" / "data" / "models"))
+        self.v_python_exe     = tk.StringVar(value=_default_python_exe())
         self.v_auto_start     = tk.BooleanVar(value=True)
 
         # ページ管理
@@ -76,17 +113,14 @@ class SetupWizard(tk.Tk):
     # UI 構築
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
-        # ヘッダー
         hdr = tk.Frame(self, bg=COLOR_BG, pady=10)
         hdr.pack(fill="x")
         tk.Label(hdr, text=APP_TITLE, bg=COLOR_BG, fg=COLOR_FG,
                  font=("Segoe UI", 14, "bold")).pack()
 
-        # コンテンツ
         self._content = tk.Frame(self, bg=COLOR_BG, padx=20, pady=10)
         self._content.pack(fill="both", expand=True)
 
-        # ページフレーム
         self._pages = [
             self._page_mode(),
             self._page_mdb(),
@@ -98,7 +132,6 @@ class SetupWizard(tk.Tk):
         for p in self._pages:
             p.place(in_=self._content, x=0, y=0, relwidth=1, relheight=1)
 
-        # ナビゲーションボタン
         nav = tk.Frame(self, bg=COLOR_BG, pady=8)
         nav.pack(fill="x", side="bottom")
         self._btn_back = tk.Button(nav, text="< 戻る", width=10,
@@ -110,8 +143,7 @@ class SetupWizard(tk.Tk):
                                    command=self._next_page)
         self._btn_next.pack(side="right", padx=20)
 
-    def _lf(self, parent: tk.Widget, text: str) -> ttk.LabelFrame:
-        """スタイル付き LabelFrame を返す。"""
+    def _lf(self, parent: tk.Widget, text: str) -> tk.LabelFrame:
         lf = tk.LabelFrame(parent, text=text, bg=COLOR_PANEL, fg=COLOR_FG,
                            font=("Segoe UI", 10, "bold"), relief="groove",
                            padx=10, pady=8)
@@ -120,7 +152,6 @@ class SetupWizard(tk.Tk):
 
     def _row(self, parent: tk.Widget, label: str,
              widget_factory, **kw) -> tk.Widget:
-        """ラベル + 入力ウィジェット 1 行を作成して返す。"""
         f = tk.Frame(parent, bg=COLOR_PANEL)
         f.pack(fill="x", pady=2)
         tk.Label(f, text=label, width=22, anchor="w",
@@ -139,8 +170,17 @@ class SetupWizard(tk.Tk):
         if d:
             var.set(d)
 
-    def _browse_file(self, var: tk.StringVar, filetypes=(("MDB", "*.mdb *.accdb"), ("All", "*"))) -> None:
+    def _browse_file(self, var: tk.StringVar,
+                     filetypes=(("MDB", "*.mdb *.accdb"), ("All", "*"))) -> None:
         f = filedialog.askopenfilename(initialdir="/", filetypes=filetypes)
+        if f:
+            var.set(f)
+
+    def _browse_exe(self, var: tk.StringVar) -> None:
+        f = filedialog.askopenfilename(
+            initialdir=str(Path(var.get()).parent) if var.get() else "/",
+            filetypes=(("Python実行ファイル", "python*.exe pythonw*.exe"), ("All", "*")),
+        )
         if f:
             var.set(f)
 
@@ -148,15 +188,14 @@ class SetupWizard(tk.Tk):
     # ページ定義
     # ------------------------------------------------------------------
     def _page(self) -> tk.Frame:
-        f = tk.Frame(self._content, bg=COLOR_BG)
-        return f
+        return tk.Frame(self._content, bg=COLOR_BG)
 
     def _page_mode(self) -> tk.Frame:
         p = self._page()
         tk.Label(p, text="ステップ 1 / 5  –  動作モード", bg=COLOR_BG, fg=COLOR_FG,
                  font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 10))
         lf = self._lf(p, "データ取得方法")
-        for label, val in MODES.items():
+        for label in MODES:
             tk.Radiobutton(lf, text=label, variable=self.v_mode, value=label,
                            bg=COLOR_PANEL, fg=COLOR_FG, selectcolor=COLOR_BG,
                            activebackground=COLOR_PANEL, activeforeground=COLOR_FG,
@@ -201,7 +240,6 @@ class SetupWizard(tk.Tk):
             ("データベース", self.v_mysql_database),
         ]:
             self._row(lf, label, self._entry, textvariable=var)
-        # パスワード
         f = tk.Frame(lf, bg=COLOR_PANEL)
         f.pack(fill="x", pady=2)
         tk.Label(f, text="パスワード", width=22, anchor="w",
@@ -209,13 +247,12 @@ class SetupWizard(tk.Tk):
         tk.Entry(f, textvariable=self.v_mysql_password, show="*",
                  bg="#1E1E2F", fg=COLOR_FG, insertbackground=COLOR_FG,
                  relief="flat").pack(side="left", fill="x", expand=True, padx=4)
-        # ポート
         self._row(lf, "ポート", self._entry, textvariable=self.v_mysql_port)
         return p
 
     def _page_dirs(self) -> tk.Frame:
         p = self._page()
-        tk.Label(p, text="ステップ 4 / 5  –  保存先ディレクトリ", bg=COLOR_BG, fg=COLOR_FG,
+        tk.Label(p, text="ステップ 4 / 5  –  保存先・Python", bg=COLOR_BG, fg=COLOR_FG,
                  font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 10))
 
         lf = self._lf(p, "Web サーバー")
@@ -233,6 +270,17 @@ class SetupWizard(tk.Tk):
             self._entry(row, var).pack(side="left", fill="x", expand=True, padx=4)
             tk.Button(row, text="参照", bg=COLOR_PANEL, fg=COLOR_FG,
                       command=lambda v=var: self._browse_dir(v)).pack(side="left")
+
+        lf3 = self._lf(p, "Python 実行ファイル（自動起動に使用）")
+        row3 = tk.Frame(lf3, bg=COLOR_PANEL)
+        row3.pack(fill="x", pady=2)
+        self._entry(row3, self.v_python_exe).pack(side="left", fill="x", expand=True, padx=(0, 4))
+        tk.Button(row3, text="参照", bg=COLOR_PANEL, fg=COLOR_FG,
+                  command=lambda: self._browse_exe(self.v_python_exe)).pack(side="left")
+        tk.Label(lf3,
+                 text="pythonw.exe を選ぶとウィンドウが非表示になります（推奨）。\n"
+                      "conda env の場合: Anaconda3\\envs\\<env>\\pythonw.exe",
+                 bg=COLOR_PANEL, fg="#E5CAFF", justify="left").pack(anchor="w", pady=(4, 0))
         return p
 
     def _page_startup(self) -> tk.Frame:
@@ -244,8 +292,11 @@ class SetupWizard(tk.Tk):
                        variable=self.v_auto_start,
                        bg=COLOR_PANEL, fg=COLOR_FG, selectcolor=COLOR_BG,
                        activebackground=COLOR_PANEL, activeforeground=COLOR_FG).pack(anchor="w")
-        tk.Label(lf, text="SYSTEM アカウントで実行されるため、ログイン不要で起動します。\n"
-                           "登録には管理者権限が必要です。",
+        tk.Label(lf,
+                 text="・SYSTEM アカウントで実行されるため、ログイン不要で起動します。\n"
+                      "・pythonw.exe を使うのでコンソールウィンドウは表示されません。\n"
+                      "・ログは %ProgramData%\\TW_Prophet\\logs\\service.log に出力されます。\n"
+                      "・登録には管理者権限が必要です（必要な場合は昇格ダイアログが表示されます）。",
                  bg=COLOR_PANEL, fg="#E5CAFF", justify="left").pack(anchor="w", pady=(6, 0))
         return p
 
@@ -283,7 +334,6 @@ class SetupWizard(tk.Tk):
         if self._current == len(self._pages) - 1:
             self._finish()
         else:
-            # sample モードは MDB / MySQL ページをスキップ
             nxt = self._current + 1
             mode_val = MODES.get(self.v_mode.get(), "internal")
             if mode_val == "sample" and nxt in (1, 2):
@@ -299,7 +349,7 @@ class SetupWizard(tk.Tk):
             self._show_page(prev)
 
     def _on_mode_change(self) -> None:
-        pass  # 将来: モードに応じて項目を動的に表示/非表示
+        pass
 
     # ------------------------------------------------------------------
     # 設定生成 / 保存
@@ -307,17 +357,18 @@ class SetupWizard(tk.Tk):
     def _build_settings_dict(self) -> dict[str, Any]:
         mode_val = MODES.get(self.v_mode.get(), "internal")
         s: dict[str, Any] = {
-            "data_mode": mode_val,
-            "port": self.v_port.get(),
+            "data_mode":  mode_val,
+            "port":       self.v_port.get(),
             "data_dir":   self.v_data_dir.get(),
             "models_dir": self.v_models_dir.get(),
+            "python_exe": self.v_python_exe.get(),
         }
         if mode_val == "internal":
             base = self.v_mdb_base.get().strip()
             s["mdb_base_dir"]      = base
-            s["shipment_mdb"]      = self.v_shipment_mdb.get().strip()   or f"{base}\\簡易受注管理.mdb"
-            s["post_shipment_mdb"] = self.v_post_ship_mdb.get().strip()  or f"{base}\\出荷管理.mdb"
-            s["manufacture_mdb"]   = self.v_mfg_mdb.get().strip()        or f"{base}\\製造管理.mdb"
+            s["shipment_mdb"]      = self.v_shipment_mdb.get().strip()  or f"{base}\\簡易受注管理.mdb"
+            s["post_shipment_mdb"] = self.v_post_ship_mdb.get().strip() or f"{base}\\出荷管理.mdb"
+            s["manufacture_mdb"]   = self.v_mfg_mdb.get().strip()       or f"{base}\\製造管理.mdb"
         return s
 
     def _build_mysql_dict(self) -> dict[str, Any]:
@@ -333,55 +384,86 @@ class SetupWizard(tk.Tk):
         try:
             SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
 
-            # settings.json
             cfg = self._build_settings_dict()
             with SETTINGS_FILE.open("w", encoding="utf-8") as f:
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
 
-            # mysql_config.json（パスワード入力がある場合のみ）
             mysql = self._build_mysql_dict()
             if any(mysql.get(k) for k in ("host", "user", "database")):
-                mysql_path = SETTINGS_DIR / "data" / "config" / "mysql_config.json"
-                mysql_path.parent.mkdir(parents=True, exist_ok=True)
+                mysql_path = SETTINGS_DIR / "mysql_config.json"
                 with mysql_path.open("w", encoding="utf-8") as f:
                     json.dump(mysql, f, ensure_ascii=False, indent=2)
 
-            # タスクスケジューラ登録
             if self.v_auto_start.get():
                 self._register_task()
 
-            messagebox.showinfo("完了", f"設定を保存しました:\n{SETTINGS_FILE}\n\nTW_Prophet を起動してください。")
+            messagebox.showinfo(
+                "完了",
+                f"設定を保存しました:\n{SETTINGS_FILE}\n\n"
+                "Windows 再起動後、TW_Prophet が自動起動します。\n"
+                "今すぐ起動する場合はタスクスケジューラから手動で開始してください。",
+            )
             self.destroy()
 
         except PermissionError:
-            messagebox.showerror("エラー", f"{SETTINGS_FILE} への書き込み権限がありません。\n管理者として実行してください。")
+            messagebox.showerror(
+                "エラー",
+                f"{SETTINGS_FILE} への書き込み権限がありません。\n管理者として実行してください。",
+            )
         except Exception as e:
             messagebox.showerror("エラー", f"保存中にエラーが発生しました:\n{e}")
 
     def _register_task(self) -> None:
-        """scripts\\register_startup.ps1 を管理者権限で実行する。"""
-        script = Path(__file__).parent / "scripts" / "register_startup.ps1"
+        """register_startup.ps1 を管理者権限で実行する。
+        管理者権限がない場合は ShellExecute runas で UAC 昇格ダイアログを表示する。
+        """
+        script = INSTALL_DIR / "scripts" / "register_startup.ps1"
         if not script.exists():
-            messagebox.showwarning("警告", "register_startup.ps1 が見つかりません。手動で登録してください。")
+            messagebox.showwarning("警告", f"register_startup.ps1 が見つかりません:\n{script}")
             return
-        try:
+
+        python_exe = self.v_python_exe.get().strip()
+        ps_args = (
+            f'-ExecutionPolicy Bypass -File "{script}" '
+            f'-Port {self.v_port.get()} '
+            f'-InstallDir "{INSTALL_DIR}" '
+            f'-PythonExe "{python_exe}"'
+        )
+
+        if _is_admin():
+            # 既に管理者 → 直接実行
             result = subprocess.run(
                 ["powershell", "-ExecutionPolicy", "Bypass",
                  "-File", str(script),
-                 f"-Port", str(self.v_port.get()),
-                 f"-InstallDir", str(Path(__file__).parent)],
-                capture_output=True, text=True
+                 "-Port", str(self.v_port.get()),
+                 "-InstallDir", str(INSTALL_DIR),
+                 "-PythonExe", python_exe],
+                capture_output=True, text=True,
             )
             if result.returncode != 0:
                 messagebox.showwarning(
                     "自動起動登録の警告",
-                    "タスクスケジューラへの登録に失敗しました（管理者権限が必要な場合があります）。\n\n"
-                    + result.stderr[:500]
+                    "タスクスケジューラへの登録に失敗しました。\n\n" + result.stderr[:500],
                 )
             else:
                 messagebox.showinfo("自動起動", "タスクスケジューラへの登録が完了しました。")
-        except Exception as e:
-            messagebox.showwarning("自動起動登録の警告", f"登録スクリプトの実行に失敗しました:\n{e}")
+        else:
+            # UAC 昇格 → 結果は非同期なので成功/失敗の確認は省略
+            ret = ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", "powershell.exe", ps_args, None, 1
+            )
+            if ret <= 32:
+                messagebox.showwarning(
+                    "自動起動登録の警告",
+                    "管理者昇格がキャンセルされたか失敗しました。\n"
+                    "後から手動で register_startup.ps1 を管理者として実行してください。",
+                )
+            else:
+                messagebox.showinfo(
+                    "自動起動",
+                    "管理者権限でタスク登録を実行しています。\n"
+                    "しばらく待ってから Windows を再起動してください。",
+                )
 
 
 # ---------------------------------------------------------------------------

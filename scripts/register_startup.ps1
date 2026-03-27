@@ -5,48 +5,65 @@
 .DESCRIPTION
     - タスク名: TW_Prophet_Web
     - トリガー: システム起動時 (At startup)
-    - ユーザー: SYSTEM アカウント（ログイン不要）
-    - 起動スクリプト: scripts\launch_web.ps1
+    - ユーザー: SYSTEM アカウント（ログイン不要・ウィンドウ非表示）
+    - 実行: pythonw.exe run_web.py（コンソール非表示）
+    - ログ: %ProgramData%\TW_Prophet\logs\service.log
 
 .NOTES
-    管理者権限で実行してください:
-        右クリック → "管理者として実行"
-    または:
-        Start-Process powershell -Verb RunAs -ArgumentList "-File register_startup.ps1"
+    管理者権限が必要です。
 #>
 
 param(
     [string]$InstallDir  = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
-    [string]$PythonExe   = "",         # 空の場合は conda env を自動検索
+    [string]$PythonExe   = "",   # 空の場合は自動検索
     [int]   $Port        = 8000,
     [string]$TaskName    = "TW_Prophet_Web"
 )
 
 # ---------------------------------------------------------------------------
-# Python 実行ファイルを解決
+# 管理者権限チェック
+# ---------------------------------------------------------------------------
+$identity  = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Error "このスクリプトは管理者権限で実行してください。"
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
+# Python 実行ファイルを解決（pythonw.exe を優先）
 # ---------------------------------------------------------------------------
 function Resolve-PythonExe {
     param([string]$Hint, [string]$InstallDir)
 
+    # ヒントが直接 pythonw.exe を指している場合はそのまま使う
     if ($Hint -and (Test-Path $Hint)) { return $Hint }
 
-    # 1. InstallDir\.venv または .conda_env 内
+    # ヒントが python.exe の場合、隣の pythonw.exe を探す
+    if ($Hint -and $Hint -match "python\.exe$") {
+        $pw = $Hint -replace "python\.exe$", "pythonw.exe"
+        if (Test-Path $pw) { return $pw }
+    }
+
+    # 1. InstallDir 内の仮想環境
     $candidates = @(
+        Join-Path $InstallDir ".venv\Scripts\pythonw.exe"
         Join-Path $InstallDir ".venv\Scripts\python.exe"
+        Join-Path $InstallDir "venv\Scripts\pythonw.exe"
         Join-Path $InstallDir "venv\Scripts\python.exe"
     )
-    foreach ($c in $candidates) {
-        if (Test-Path $c) { return $c }
-    }
+    foreach ($c in $candidates) { if (Test-Path $c) { return $c } }
 
     # 2. 環境変数 TW_PYTHON_EXE
     if ($env:TW_PYTHON_EXE -and (Test-Path $env:TW_PYTHON_EXE)) {
         return $env:TW_PYTHON_EXE
     }
 
-    # 3. PATH 上の python
-    $found = Get-Command python -ErrorAction SilentlyContinue
-    if ($found) { return $found.Source }
+    # 3. PATH 上の pythonw / python
+    foreach ($cmd in @("pythonw", "python")) {
+        $found = Get-Command $cmd -ErrorAction SilentlyContinue
+        if ($found) { return $found.Source }
+    }
 
     return $null
 }
@@ -63,6 +80,24 @@ Write-Host "Port        : $Port"
 Write-Host "Task Name   : $TaskName"
 
 # ---------------------------------------------------------------------------
+# settings.json に python_exe を保存（wizard がインストール済みパスを読めるように）
+# ---------------------------------------------------------------------------
+$settingsPath = "$env:ProgramData\TW_Prophet\data\config\settings.json"
+if (Test-Path $settingsPath) {
+    try {
+        $s = Get-Content $settingsPath -Raw | ConvertFrom-Json
+        $s | Add-Member -NotePropertyName "python_exe" -NotePropertyValue $pythonExeResolved -Force
+        $s | ConvertTo-Json -Depth 5 | Set-Content $settingsPath -Encoding UTF8
+    } catch {}
+}
+
+# ---------------------------------------------------------------------------
+# ログディレクトリを作成
+# ---------------------------------------------------------------------------
+$logDir = "$env:ProgramData\TW_Prophet\logs"
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+
+# ---------------------------------------------------------------------------
 # 既存タスクを削除
 # ---------------------------------------------------------------------------
 $existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
@@ -72,51 +107,55 @@ if ($existing) {
 }
 
 # ---------------------------------------------------------------------------
-# 起動コマンド
+# タスクアクション
+# TW_Prophet_Web.exe が渡された場合は直接実行（引数なし）
+# python/pythonw の場合は run_web.py を引数に渡す
 # ---------------------------------------------------------------------------
-$scriptFile = Join-Path $InstallDir "run_web.py"
-$action = New-ScheduledTaskAction `
-    -Execute  $pythonExeResolved `
-    -Argument "`"$scriptFile`"" `
-    -WorkingDirectory $InstallDir
+$isBundledExe = ($pythonExeResolved -match "TW_Prophet_Web\.exe$")
 
+if ($isBundledExe) {
+    $action = New-ScheduledTaskAction `
+        -Execute          $pythonExeResolved `
+        -WorkingDirectory $InstallDir
+} else {
+    $scriptFile = Join-Path $InstallDir "run_web.py"
+    $action = New-ScheduledTaskAction `
+        -Execute          $pythonExeResolved `
+        -Argument         "`"$scriptFile`"" `
+        -WorkingDirectory $InstallDir
+}
+
+# ---------------------------------------------------------------------------
+# トリガー・設定
+# ---------------------------------------------------------------------------
 $trigger = New-ScheduledTaskTrigger -AtStartup
 
 $settings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit (New-TimeSpan -Hours 0) `
     -RestartCount 3 `
     -RestartInterval (New-TimeSpan -Minutes 1) `
-    -StartWhenAvailable
+    -StartWhenAvailable `
+    -Hidden
 
 # ---------------------------------------------------------------------------
-# 環境変数をタスクに埋め込む
+# SYSTEM アカウントで実行（ログイン不要・ウィンドウ非表示）
 # ---------------------------------------------------------------------------
-$principal = New-ScheduledTaskPrincipal `
+$taskPrincipal = New-ScheduledTaskPrincipal `
     -UserId    "SYSTEM" `
     -LogonType "ServiceAccount" `
     -RunLevel  "Highest"
 
-# PORT は環境変数 PATH に追加して渡す
-$envBlock = @(
-    "PORT=$Port"
-    "TW_PROPHET_PATH=$InstallDir"
-)
-# ScheduledTask の EnvironmentVariables は直接設定できないため、
-# run_web.py が settings.json から読む方式を採用（上記の config.py 参照）。
-# 必要なら %ProgramData%\TW_Prophet\settings.json を更新する。
+$task = New-ScheduledTask `
+    -Action      $action `
+    -Trigger     $trigger `
+    -Settings    $settings `
+    -Principal   $taskPrincipal `
+    -Description "TW_Prophet AI 需要予測 Web サービス（自動起動・ウィンドウ非表示）"
 
-# ---------------------------------------------------------------------------
-# タスクを登録
-# ---------------------------------------------------------------------------
-Register-ScheduledTask `
-    -TaskName  $TaskName `
-    -Action    $action `
-    -Trigger   $trigger `
-    -Settings  $settings `
-    -Principal $principal `
-    -Description "TW_Prophet AI 需要予測 Web サービス（自動起動）"
+Register-ScheduledTask -TaskName $TaskName -InputObject $task
 
 Write-Host ""
 Write-Host "[OK] タスク '$TaskName' を登録しました。"
-Write-Host "     次回起動時から自動的に Port $Port で起動します。"
+Write-Host "     次回 Windows 起動時から Port $Port で自動起動します（ウィンドウ非表示）。"
 Write-Host "     今すぐ起動: Start-ScheduledTask -TaskName '$TaskName'"
+Write-Host "     ログ確認  : $logDir\service.log"
