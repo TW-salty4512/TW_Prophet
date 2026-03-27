@@ -20,11 +20,6 @@ param(
     [string]$TaskName    = "TW_Prophet_Web"
 )
 
-# Python (subprocess) からの呼び出し時に文字化けしないよう UTF-8 出力に固定
-# ※ param() より後に書かないと引数が認識されない
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding            = [System.Text.Encoding]::UTF8
-
 # ---------------------------------------------------------------------------
 # 管理者権限チェック
 # ---------------------------------------------------------------------------

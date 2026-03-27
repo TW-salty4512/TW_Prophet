@@ -446,23 +446,27 @@ class SetupWizard(tk.Tk):
         )
 
         if _is_admin():
-            # 既に管理者 → 直接実行
-            # -Command でコードページを 65001(UTF-8) に設定してから -File を呼ぶ
-            ps_cmd = (
-                f"chcp 65001 | Out-Null; "
-                f"& '{script}' "
-                f"-Port {self.v_port.get()} "
-                f"-InstallDir '{INSTALL_DIR}' "
-                f"-PythonExe '{python_exe}'"
-            )
+            # 既に管理者 → 直接実行（-File 形式で引数を確実に渡す）
             result = subprocess.run(
                 ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                 "-Command", ps_cmd],
-                capture_output=True,
-                encoding="utf-8", errors="replace",
+                 "-File", str(script),
+                 "-Port", str(self.v_port.get()),
+                 "-InstallDir", str(INSTALL_DIR),
+                 "-PythonExe", python_exe],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
+            # 日本語 Windows のコンソールは cp932。UTF-8 で失敗したら cp932 で再試行
+            def _decode(b: bytes) -> str:
+                for enc in ("utf-8", "cp932", "utf-16"):
+                    try:
+                        return b.decode(enc)
+                    except Exception:
+                        pass
+                return b.decode("utf-8", errors="replace")
+
             if result.returncode != 0:
-                err = (result.stderr or result.stdout or "不明なエラー")[:800]
+                err = (_decode(result.stderr) or _decode(result.stdout) or "不明なエラー")[:800]
                 messagebox.showwarning(
                     "自動起動登録の警告",
                     "タスクスケジューラへの登録に失敗しました。\n\n" + err,
