@@ -1,5 +1,5 @@
 <#
-.SYNOPSIS  Register TW_Prophet_Web in Task Scheduler (run at startup, SYSTEM, no window).
+.SYNOPSIS  Register TW_Prophet_Web in Task Scheduler via XML (run at startup, SYSTEM, no window).
 .NOTES     Requires administrator privileges.
 #>
 
@@ -10,15 +10,14 @@ param(
     [string]$TaskName   = "TW_Prophet_Web"
 )
 
-# Resolve InstallDir default here (not inside param() to avoid issues in some environments)
 if (-not $InstallDir) {
     $InstallDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 }
 
 # --- Admin check ---
-$id  = [Security.Principal.WindowsIdentity]::GetCurrent()
-$p   = New-Object Security.Principal.WindowsPrincipal($id)
-if (-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+$id = [Security.Principal.WindowsIdentity]::GetCurrent()
+$pr = New-Object Security.Principal.WindowsPrincipal($id)
+if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Error "Run as administrator."
     exit 1
 }
@@ -48,26 +47,79 @@ Write-Host "Exe        : $exeToRun"
 Write-Host "Port       : $Port"
 Write-Host "TaskName   : $TaskName"
 
-# --- Create log dir ---
+# --- Log dir ---
 $logDir = Join-Path $env:ProgramData "TW_Prophet\logs"
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
 
-# --- Build task run string ---
+# --- Build Arguments field ---
 $isBundled = ($exeToRun -match "TW_Prophet_Web\.exe$")
 if ($isBundled) {
-    $tr = "`"$exeToRun`""
+    $argField = ""
 } else {
-    $script = Join-Path $InstallDir "run_web.py"
-    $tr = "`"$exeToRun`" `"$script`""
+    $scriptPath = Join-Path $InstallDir "run_web.py"
+    $argField = "`"$scriptPath`""
 }
 
-# --- Delete existing task ---
-schtasks /Delete /TN $TaskName /F 2>$null | Out-Null
+# --- Build Task XML (most reliable method, avoids all schtasks quoting issues) ---
+# Escape XML special characters in paths
+$xmlExe  = $exeToRun  -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;' -replace '"','&quot;'
+$xmlArgs = $argField  -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;' -replace '"','&quot;'
+$xmlDir  = $InstallDir -replace '&','&amp;' -replace '<','&lt;' -replace '>','&gt;' -replace '"','&quot;'
 
-# --- Register with schtasks.exe ---
-$out = schtasks /Create /TN $TaskName /TR $tr /SC ONSTART /RU SYSTEM /RL HIGHEST /F /DELAY 0000:10 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "schtasks failed: $out"
+$taskXml = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>TW_Prophet Web service (auto-start, no window)</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <BootTrigger>
+      <Enabled>true</Enabled>
+      <Delay>PT30S</Delay>
+    </BootTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-18</UserId>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>3</Count>
+    </RestartOnFailure>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>$xmlExe</Command>
+      <Arguments>$xmlArgs</Arguments>
+      <WorkingDirectory>$xmlDir</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+"@
+
+# --- Delete existing task ---
+Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+
+# --- Register via XML (most reliable) ---
+try {
+    Register-ScheduledTask -TaskName $TaskName -Xml $taskXml -Force | Out-Null
+} catch {
+    Write-Error "Register-ScheduledTask failed: $_"
+    exit 1
+}
+
+# --- Verify ---
+$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if (-not $task) {
+    Write-Error "Task registration could not be verified."
     exit 1
 }
 
@@ -81,6 +133,6 @@ if (Test-Path $cfg) {
     } catch {}
 }
 
-Write-Host "OK: Task '$TaskName' registered. Starts at next boot."
-Write-Host "    Run now: schtasks /Run /TN $TaskName"
-Write-Host "    Log    : $logDir\service.log"
+Write-Host "OK: Task '$TaskName' registered. Starts 30s after next boot."
+Write-Host "    Run now  : Start-ScheduledTask -TaskName '$TaskName'"
+Write-Host "    Log      : $logDir\service.log"
