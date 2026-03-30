@@ -19,7 +19,8 @@ def _collect_extra_dlls():
     candidates = []
     patterns = {
         env / 'DLLs': ['ffi*.dll', 'libffi*.dll', '_ctypes*.pyd', 'pyexpat*.pyd'],
-        env / 'Library' / 'bin': ['ffi*.dll', 'libffi*.dll', 'libexpat*.dll', 'expat*.dll'],
+        env / 'Library' / 'bin': ['ffi*.dll', 'libffi*.dll', 'libexpat*.dll', 'expat*.dll',
+                                   'sqlite3.dll', 'liblzma.dll', 'libbz2.dll', 'LIBBZ2.dll'],
         env: ['ffi*.dll'],
     }
     for search_dir, pats in patterns.items():
