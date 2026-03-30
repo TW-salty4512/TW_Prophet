@@ -67,7 +67,8 @@ def smape(y_true, y_pred):
 
 class ModelHandler:
     def __init__(self):
-        self.model_dir = "./models"
+        from config import MODELS_DIR
+        self.model_dir = str(MODELS_DIR)
         os.makedirs(self.model_dir, exist_ok=True)
 
         self.WEEKLY_FREQ = "W-SUN"

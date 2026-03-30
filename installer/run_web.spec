@@ -9,11 +9,10 @@
 
 import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 ROOT = Path(SPECPATH).parent  # project/
 
-# conda 環境では libffi (ffi-8.dll など) が Library\bin にある
-# PyInstaller が自動収集しないため明示的にバンドルする
 def _collect_extra_dlls():
     """Collect DLLs that PyInstaller misses from conda envs."""
     env = Path(sys.executable).parent
@@ -30,29 +29,19 @@ def _collect_extra_dlls():
                     candidates.append((str(f), '.'))
     return candidates
 
-def _collect_xgboost_lib():
-    """Bundle xgboost.dll so XGBoost can find it at runtime."""
-    import importlib.util
-    spec = importlib.util.find_spec('xgboost')
-    if spec is None:
-        return []
-    xgb_dir = Path(spec.origin).parent
-    dll = xgb_dir / 'lib' / 'xgboost.dll'
-    if dll.exists():
-        return [(str(dll), 'xgboost/lib')]
-    return []
+# collect_data_files('xgboost') includes VERSION, py.typed, and xgboost.dll
+xgboost_datas = collect_data_files('xgboost')
 
 a = Analysis(
     [str(ROOT / 'run_web.py')],
     pathex=[str(ROOT)],
-    binaries=_collect_extra_dlls() + _collect_xgboost_lib(),
+    binaries=_collect_extra_dlls(),
     datas=[
-        # サンプルデータ・静的ファイル
         (str(ROOT / 'examples'), 'examples'),
         (str(ROOT / 'public'),   'public'),
-    ],
+    ] + xgboost_datas,
     hiddenimports=[
-        # uvicorn 内部モジュール（文字列ではなくオブジェクト渡しでも必要）
+        # uvicorn internals
         'uvicorn.logging',
         'uvicorn.loops',
         'uvicorn.loops.auto',
@@ -75,7 +64,7 @@ a = Analysis(
         'starlette.middleware.cors',
         'anyio',
         'anyio._backends._asyncio',
-        # データ処理
+        # data processing
         'pandas',
         'numpy',
         'xgboost',
@@ -84,7 +73,7 @@ a = Analysis(
         'sklearn.neighbors._typedefs',
         'sklearn.neighbors._quad_tree',
         'sklearn.tree._utils',
-        # DB 接続（internal モード）
+        # DB
         'pyodbc',
         'sqlalchemy',
         'sqlalchemy.dialects.mysql',
@@ -92,9 +81,9 @@ a = Analysis(
         'mysql.connector',
         'mysql.connector.plugins',
         'mysql.connector.plugins.mysql_native_password',
-        # 祝日計算
+        # holiday
         'jpholiday',
-        # アプリ内モジュール
+        # app modules
         'config',
         'tw_prophet_web',
         'api',
@@ -115,7 +104,6 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # 不要な大型パッケージを除外してサイズ削減
         'tkinter',
         'IPython',
         'jupyter',
@@ -137,8 +125,8 @@ exe = EXE(
     name='TW_Prophet_Web',
     debug=False,
     strip=False,
-    upx=False,          # UPX はウイルス誤検知の原因になるため無効
-    console=False,      # コンソールウィンドウを非表示
+    upx=False,
+    console=False,
     icon=str(ROOT / 'icon.ico') if (ROOT / 'icon.ico').exists() else None,
     version=None,
 )
