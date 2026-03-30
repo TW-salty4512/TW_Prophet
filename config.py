@@ -84,6 +84,8 @@ NOTIFY_SETTINGS_JSON = Path(_get("notify_settings_json", "TW_NOTIFY_SETTINGS_JSO
                                   str(CONFIG_DIR / "notify_settings.json")))
 NOTIFY_STATE_JSON   = Path(_get("notify_state_json",  "TW_NOTIFY_STATE_JSON",
                                 str(DATA_DIR / "notify_state.json")))
+RETRAIN_STATE_JSON  = Path(_get("retrain_state_json", "TW_RETRAIN_STATE_JSON",
+                                str(DATA_DIR / "retrain_state.json")))
 
 # ---------------------------------------------------------------------------
 # MDB パス（社内ファイルサーバーまたはローカル）
@@ -128,9 +130,10 @@ MYSQL: dict[str, Any] = _load_mysql_conf()
 # ---------------------------------------------------------------------------
 # Web 学習許可 / 通知設定
 # ---------------------------------------------------------------------------
-ALLOW_WEB_TRAIN     : bool = _get("allow_web_train",    "TW_PROPHET_ALLOW_WEB_TRAIN",    "0") == "1"
-NOTIFY_AUTO         : bool = _get("notify_auto",        "TW_PROPHET_NOTIFY_AUTO",        "1") == "1"
-NOTIFY_INTERVAL_MIN : int  = int(_get("notify_interval_min", "TW_PROPHET_NOTIFY_INTERVAL_MIN", "360"))
+ALLOW_WEB_TRAIN        : bool = _get("allow_web_train",        "TW_PROPHET_ALLOW_WEB_TRAIN",        "1") == "1"
+NOTIFY_AUTO            : bool = _get("notify_auto",            "TW_PROPHET_NOTIFY_AUTO",            "1") == "1"
+NOTIFY_INTERVAL_MIN    : int  = int(_get("notify_interval_min", "TW_PROPHET_NOTIFY_INTERVAL_MIN",   "360"))
+AUTO_RETRAIN_MONTHLY   : bool = _get("auto_retrain_monthly",   "TW_PROPHET_AUTO_RETRAIN_MONTHLY",   "1") == "1"
 
 # ---------------------------------------------------------------------------
 # モード切替：内部(mdb/mysql) or サンプル(csv)
@@ -189,6 +192,7 @@ def summary() -> dict[str, Any]:
         "shipment_mdb": str(SHIPMENT_MDB),
         "mysql_host":  MYSQL.get("host"),
         "mysql_db":    MYSQL.get("database"),
-        "allow_web_train":  ALLOW_WEB_TRAIN,
-        "notify_auto":      NOTIFY_AUTO,
+        "allow_web_train":       ALLOW_WEB_TRAIN,
+        "notify_auto":           NOTIFY_AUTO,
+        "auto_retrain_monthly":  AUTO_RETRAIN_MONTHLY,
     }

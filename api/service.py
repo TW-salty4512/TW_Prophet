@@ -10,7 +10,7 @@ import io
 import json
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -92,9 +92,16 @@ class TWProphetWebService:
         self._lock        = threading.RLock()
         self._db_lock     = threading.RLock()
         self._notify_lock = threading.Lock()
+        self._train_lock  = threading.Lock()
+        self._status_lock = threading.Lock()
 
         self._shipment_df:  pd.DataFrame | None = None
         self._inventory_df: pd.DataFrame | None = None
+
+        self._train_status: dict[str, Any] = {
+            "running": False, "total": 0, "done": 0,
+            "failed": [], "started_at": None, "finished_at": None, "current": None,
+        }
 
         with self._lock:
             self._ensure_notify_settings_file()
@@ -102,6 +109,10 @@ class TWProphetWebService:
         if config.NOTIFY_AUTO:
             t = threading.Thread(target=self._notify_loop, daemon=True)
             t.start()
+
+        if config.AUTO_RETRAIN_MONTHLY:
+            t2 = threading.Thread(target=self._monthly_retrain_loop, daemon=True)
+            t2.start()
 
     # ------------------------------------------------------------------
     # 永続リスト（除外/週次/メール）
@@ -497,3 +508,82 @@ class TWProphetWebService:
             self._save_notify_state(state2)
 
         return {"ok": True, "sent": 1, "pending": len(pending), "items": pending[:50]}
+
+    # ------------------------------------------------------------------
+    # 一括学習
+    # ------------------------------------------------------------------
+    def train_all(self) -> dict[str, Any]:
+        """全バーコードを順番に学習する（バックグラウンド実行）。"""
+        if not self._train_lock.acquire(blocking=False):
+            return {"ok": False, "reason": "already_running"}
+
+        def _run() -> None:
+            try:
+                barcodes = self.list_barcodes()
+                total = len(barcodes)
+                failed: list[dict[str, str]] = []
+                with self._status_lock:
+                    self._train_status.update({
+                        "running": True, "total": total, "done": 0,
+                        "failed": [], "started_at": _now_iso(),
+                        "finished_at": None, "current": None,
+                    })
+                for bc in barcodes:
+                    with self._status_lock:
+                        self._train_status["current"] = bc
+                    try:
+                        self.train_one(bc)
+                    except Exception as e:
+                        failed.append({"barcode": bc, "error": str(e)})
+                    with self._status_lock:
+                        self._train_status["done"] += 1
+                        self._train_status["failed"] = failed
+
+                now_iso = _now_iso()
+                with self._status_lock:
+                    self._train_status.update({
+                        "running": False, "finished_at": now_iso, "current": None,
+                    })
+                self._save_retrain_state(now_iso)
+            finally:
+                self._train_lock.release()
+
+        threading.Thread(target=_run, daemon=True).start()
+        return {"ok": True, "started": True}
+
+    def get_train_status(self) -> dict[str, Any]:
+        with self._status_lock:
+            status = dict(self._train_status)
+            status["failed"] = list(status.get("failed", []))
+        retrain = self._load_retrain_state()
+        status["last_retrain_at"] = retrain.get("last_retrain_at")
+        status["next_retrain_at"] = retrain.get("next_retrain_at")
+        status["auto_retrain_monthly"] = config.AUTO_RETRAIN_MONTHLY
+        return status
+
+    # ------------------------------------------------------------------
+    # 月次自動再学習
+    # ------------------------------------------------------------------
+    def _load_retrain_state(self) -> dict[str, Any]:
+        return _load_json_dict(config.RETRAIN_STATE_JSON)
+
+    def _save_retrain_state(self, last_retrain_at: str) -> None:
+        next_dt = datetime.fromisoformat(last_retrain_at) + timedelta(days=30)
+        _save_json_dict(config.RETRAIN_STATE_JSON, {
+            "last_retrain_at": last_retrain_at,
+            "next_retrain_at": next_dt.isoformat(timespec="seconds"),
+        })
+
+    def _monthly_retrain_loop(self) -> None:
+        time.sleep(60)  # 起動直後は待機
+        while True:
+            try:
+                state = self._load_retrain_state()
+                next_str = state.get("next_retrain_at")
+                if next_str:
+                    next_dt = _parse_iso(next_str)
+                    if next_dt and datetime.now() >= next_dt:
+                        self.train_all()
+            except Exception as e:
+                print(f"[WARN] monthly retrain check failed: {e}")
+            time.sleep(3600)  # 1時間ごとにチェック
