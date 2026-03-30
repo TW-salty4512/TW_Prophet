@@ -21,10 +21,13 @@ from model.transforms import safe_array
 
 def default_xgb(mode: str, **override) -> XGBRegressor:
     """モード別デフォルト XGBRegressor を返す。"""
+    import sys
+    # PyInstaller frozen exe ではサブプロセス起動が禁止されるため n_jobs=1 を強制
+    _n_jobs = 1 if getattr(sys, "frozen", False) else -1
     base: Dict[str, Any] = {
         "objective": "reg:squarederror",
         "random_state": 42,
-        "n_jobs": -1,
+        "n_jobs": _n_jobs,
     }
     if mode == "weekly":
         base.update({
@@ -94,13 +97,15 @@ def search_best_xgb(mode: str, X: np.ndarray, y: np.ndarray) -> Tuple[XGBRegress
     n_splits = min(4, max(2, len(X) // (20 if mode == "weekly" else 12)))
     n_iter   = 25 if mode == "weekly" else 24
 
+    import sys
+    _n_jobs = 1 if getattr(sys, "frozen", False) else -1
     search = RandomizedSearchCV(
         estimator=default_xgb(mode),
         param_distributions=_param_dist(mode),
         n_iter=n_iter,
         scoring="neg_root_mean_squared_error",
         cv=TimeSeriesSplit(n_splits=n_splits),
-        n_jobs=-1,
+        n_jobs=_n_jobs,
         random_state=42,
         verbose=0,
     )

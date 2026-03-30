@@ -92,11 +92,13 @@ def barcodes(search: str = "") -> dict[str, Any]:
 
 @router.post("/api/train")
 def train(req: BarcodeRequest) -> dict[str, Any]:
+    import traceback
     if not config.ALLOW_WEB_TRAIN:
         raise HTTPException(status_code=403, detail="Webからの学習は無効です。")
     try:
         return _s().train_one(req.barcode.strip())
     except Exception as e:
+        logger.error("[train] %s: %s\n%s", req.barcode, e, traceback.format_exc())
         raise HTTPException(status_code=400, detail=str(e))
 
 

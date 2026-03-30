@@ -13,8 +13,14 @@ from typing import Any, Dict, Optional
 import joblib
 
 
+_INVALID_CHARS = str.maketrans({c: "_" for c in r'\/:*?"<>|' + "\t\n\r"})
+
+def _safe_filename(barcode: str) -> str:
+    """Windowsのファイル名禁止文字を _ に置換する。"""
+    return barcode.translate(_INVALID_CHARS)
+
 def model_path(model_dir: str | Path, barcode: str, model_type: str) -> str:
-    return os.path.join(str(model_dir), f"{model_type}_{barcode}.pkl")
+    return os.path.join(str(model_dir), f"{model_type}_{_safe_filename(barcode)}.pkl")
 
 
 def save_model(
