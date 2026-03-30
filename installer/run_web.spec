@@ -30,10 +30,22 @@ def _collect_extra_dlls():
                     candidates.append((str(f), '.'))
     return candidates
 
+def _collect_xgboost_lib():
+    """Bundle xgboost.dll so XGBoost can find it at runtime."""
+    import importlib.util
+    spec = importlib.util.find_spec('xgboost')
+    if spec is None:
+        return []
+    xgb_dir = Path(spec.origin).parent
+    dll = xgb_dir / 'lib' / 'xgboost.dll'
+    if dll.exists():
+        return [(str(dll), 'xgboost/lib')]
+    return []
+
 a = Analysis(
     [str(ROOT / 'run_web.py')],
     pathex=[str(ROOT)],
-    binaries=_collect_extra_dlls(),
+    binaries=_collect_extra_dlls() + _collect_xgboost_lib(),
     datas=[
         # サンプルデータ・静的ファイル
         (str(ROOT / 'examples'), 'examples'),
