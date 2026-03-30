@@ -33,6 +33,13 @@ class ExclusionRequest(BaseModel):
     barcode: str
     excluded: bool
 
+class WeeklyRequest(BaseModel):
+    barcode: str
+    weekly: bool
+
+class EmailRequest(BaseModel):
+    email: str
+
 class NotifySettingsRequest(BaseModel):
     enabled: bool | None = None
     reminder_days: int | None = None
@@ -161,6 +168,51 @@ def excluded() -> dict[str, Any]:
 def update_excluded(req: ExclusionRequest) -> dict[str, Any]:
     try:
         _s().set_excluded(req.barcode.strip(), req.excluded)
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# 週次/月次設定
+# ---------------------------------------------------------------------------
+
+@router.get("/api/weekly")
+def weekly() -> dict[str, Any]:
+    return {"weekly": sorted(_s().get_weekly_set())}
+
+
+@router.post("/api/weekly")
+def update_weekly(req: WeeklyRequest) -> dict[str, Any]:
+    try:
+        _s().set_weekly(req.barcode.strip(), req.weekly)
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# メールリスト
+# ---------------------------------------------------------------------------
+
+@router.get("/api/emails")
+def emails() -> dict[str, Any]:
+    return {"emails": _s().get_email_list()}
+
+
+@router.post("/api/emails")
+def add_email(req: EmailRequest) -> dict[str, Any]:
+    try:
+        _s().add_email(req.email.strip())
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/api/emails")
+def remove_email(req: EmailRequest) -> dict[str, Any]:
+    try:
+        _s().remove_email(req.email.strip())
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -362,6 +414,8 @@ _HTML_TEMPLATE = r"""<!doctype html>
   <div class="tabBar">
     <button class="tabBtn active" id="tab-predict" onclick="switchTab('predict')">予測</button>
     <button class="tabBtn"        id="tab-train"   onclick="switchTab('train')">学習管理</button>
+    <button class="tabBtn"        id="tab-manage"  onclick="switchTab('manage')">製品管理</button>
+    <button class="tabBtn"        id="tab-email"   onclick="switchTab('email')">メール管理</button>
   </div>
 
   <!-- 予測タブ -->
@@ -417,6 +471,54 @@ _HTML_TEMPLATE = r"""<!doctype html>
             <tbody id="parts"></tbody>
           </table>
         </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- 製品管理タブ -->
+  <div class="tabPane" id="pane-manage">
+    <div style="flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px;box-sizing:border-box;align-items:stretch;">
+
+      <!-- 除外管理 -->
+      <section class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span style="font-weight:600;">表示・学習から除外する製品</span>
+          <span id="excludedCount" class="pill" style="margin-left:auto;">0件</span>
+        </div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px;">除外すると製品リストから非表示になり、学習対象からも外れます。</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input id="excludeSearch" placeholder="バーコードを検索" style="flex:1;" oninput="renderManageList()" />
+        </div>
+        <div id="manageList" class="list" style="flex:1 1 auto;"></div>
+      </section>
+
+      <!-- 週次/月次管理 -->
+      <section class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span style="font-weight:600;">週次モデルで学習する製品</span>
+          <span id="weeklyCount" class="pill green" style="margin-left:auto;">0件</span>
+        </div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px;">チェックあり → 週次モデル（W-SUN）。チェックなし → 月次モデル（M）。</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input id="weeklySearch" placeholder="バーコードを検索" style="flex:1;" oninput="renderWeeklyList()" />
+        </div>
+        <div id="weeklyList" class="list" style="flex:1 1 auto;"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- メール管理タブ -->
+  <div class="tabPane" id="pane-email">
+    <div style="flex:1 1 auto;min-height:0;padding:12px;box-sizing:border-box;display:flex;flex-direction:column;max-width:600px;">
+      <section class="card" style="flex:1 1 auto;">
+        <div style="font-weight:600;margin-bottom:12px;">在庫減少通知メールリスト</div>
+        <div class="muted" style="font-size:12px;margin-bottom:12px;">このリストに登録したアドレスに在庫減少通知メールが送信されます。</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <input id="newEmail" placeholder="追加するメールアドレス" style="flex:1;" onkeydown="if(event.key==='Enter') addEmail()" />
+          <button class="secondary" onclick="addEmail()">追加</button>
+        </div>
+        <div id="emailList" class="list" style="flex:1 1 auto;min-height:120px;"></div>
+        <div id="emailMsg" class="muted" style="margin-top:8px;font-size:13px;"></div>
       </section>
     </div>
   </div>
@@ -509,7 +611,9 @@ _HTML_TEMPLATE = r"""<!doctype html>
       document.querySelectorAll('.tabPane').forEach(p=>p.classList.remove('active'));
       document.getElementById('tab-'+name).classList.add('active');
       document.getElementById('pane-'+name).classList.add('active');
-      if(name==='train') { loadTrainList().catch(()=>{}); refreshTrainStatus(); }
+      if(name==='train')  { loadTrainList().catch(()=>{}); refreshTrainStatus(); }
+      if(name==='manage') { loadManageData().catch(()=>{}); }
+      if(name==='email')  { loadEmails().catch(()=>{}); }
     }
 
     /* -------- 予測タブ -------- */
@@ -799,6 +903,178 @@ _HTML_TEMPLATE = r"""<!doctype html>
       }else{
         badge.textContent='無効';badge.className='pill';
         document.getElementById('autoRetrainNote').textContent='自動再学習はOFFです（settings.jsonで変更可）。';
+      }
+    }
+
+    /* -------- 製品管理タブ -------- */
+    let _allBarcodes = [];   // 全バーコード（除外含む）
+    let _excludedSet = new Set();
+    let _weeklySet   = new Set();
+
+    async function loadManageData(){
+      // 全バーコード（除外済みも含む）、除外リスト、週次リストを同時取得
+      const [rAll, rExc, rWkl] = await Promise.all([
+        api('/api/barcodes?search=&include_excluded=1').catch(()=>api('/api/barcodes?search=')),
+        api('/api/excluded'),
+        api('/api/weekly'),
+      ]);
+      const jAll = await rAll.json();
+      const jExc = await rExc.json();
+      const jWkl = await rWkl.json();
+
+      // 除外済み + アクティブ をマージして全バーコードリストを作る
+      const active = new Set(jAll.barcodes || []);
+      _excludedSet = new Set(jExc.excluded || []);
+      _weeklySet   = new Set(jWkl.weekly   || []);
+      _allBarcodes = Array.from(new Set([...active, ..._excludedSet])).sort();
+
+      document.getElementById('excludedCount').textContent = _excludedSet.size + '件';
+      document.getElementById('weeklyCount').textContent   = _weeklySet.size   + '件';
+      renderManageList();
+      renderWeeklyList();
+    }
+
+    function renderManageList(){
+      const q = (document.getElementById('excludeSearch').value || '').toLowerCase();
+      const list = document.getElementById('manageList');
+      list.innerHTML = '';
+      const items = _allBarcodes.filter(bc => !q || bc.toLowerCase().includes(q));
+      items.forEach(bc => {
+        const isExc = _excludedSet.has(bc);
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.style.opacity = isExc ? '0.5' : '1';
+        div.innerHTML =
+          '<span class="itemLabel" title="'+bc+'">' + bc + '</span>' +
+          '<button class="sm ' + (isExc ? 'secondary' : 'danger') + '" ' +
+            'onclick="toggleExclude(event,\''+bc.replace(/'/g,"\\'")+'\')">' +
+            (isExc ? '解除' : '除外') + '</button>';
+        list.appendChild(div);
+      });
+      if(!items.length) list.innerHTML = '<div style="padding:12px;color:#888;">該当なし</div>';
+    }
+
+    async function toggleExclude(evt, bc){
+      const btn = evt.currentTarget || evt.target;
+      btn.disabled = true;
+      const nowExcluded = _excludedSet.has(bc);
+      try{
+        await api('/api/excluded',{
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({barcode: bc, excluded: !nowExcluded})
+        });
+        if(nowExcluded) _excludedSet.delete(bc);
+        else            _excludedSet.add(bc);
+        document.getElementById('excludedCount').textContent = _excludedSet.size + '件';
+        renderManageList();
+      }catch(e){
+        alert('失敗: ' + e.message);
+        btn.disabled = false;
+      }
+    }
+
+    function renderWeeklyList(){
+      const q = (document.getElementById('weeklySearch').value || '').toLowerCase();
+      const list = document.getElementById('weeklyList');
+      list.innerHTML = '';
+      // アクティブなバーコード（除外除く）のみ表示
+      const active = _allBarcodes.filter(bc => !_excludedSet.has(bc));
+      const items  = active.filter(bc => !q || bc.toLowerCase().includes(q));
+      items.forEach(bc => {
+        const isWeekly = _weeklySet.has(bc);
+        const div = document.createElement('div');
+        div.className = 'item';
+        const badge = isWeekly
+          ? '<span class="pill green" style="font-size:11px;">週次</span>'
+          : '<span class="pill"       style="font-size:11px;">月次</span>';
+        div.innerHTML =
+          badge +
+          '<span class="itemLabel" title="'+bc+'" style="margin-left:6px;">'+bc+'</span>' +
+          '<button class="sm secondary" onclick="toggleWeekly(event,\''+bc.replace(/'/g,"\\'")+'\')">' +
+            (isWeekly ? '→月次に変更' : '→週次に変更') + '</button>';
+        list.appendChild(div);
+      });
+      if(!items.length) list.innerHTML = '<div style="padding:12px;color:#888;">該当なし</div>';
+    }
+
+    async function toggleWeekly(evt, bc){
+      const btn = evt.currentTarget || evt.target;
+      btn.disabled = true;
+      const nowWeekly = _weeklySet.has(bc);
+      try{
+        await api('/api/weekly',{
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({barcode: bc, weekly: !nowWeekly})
+        });
+        if(nowWeekly) _weeklySet.delete(bc);
+        else          _weeklySet.add(bc);
+        document.getElementById('weeklyCount').textContent = _weeklySet.size + '件';
+        renderWeeklyList();
+      }catch(e){
+        alert('失敗: ' + e.message);
+        btn.disabled = false;
+      }
+    }
+
+    /* -------- メール管理タブ -------- */
+    function setEmailMsg(t){ document.getElementById('emailMsg').textContent = t || ''; }
+
+    async function loadEmails(){
+      try{
+        const r = await api('/api/emails');
+        const j = await r.json();
+        renderEmailList(j.emails || []);
+      }catch(e){ setEmailMsg('取得失敗: ' + e.message); }
+    }
+
+    function renderEmailList(emails){
+      const list = document.getElementById('emailList');
+      list.innerHTML = '';
+      if(!emails.length){
+        list.innerHTML = '<div style="padding:12px;color:#888;">登録なし</div>';
+        return;
+      }
+      emails.forEach(em => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML =
+          '<span class="itemLabel">'+em+'</span>' +
+          '<button class="sm danger" onclick="removeEmail(event,\''+em.replace(/'/g,"\\'")+'\')">' +
+          '削除</button>';
+        list.appendChild(div);
+      });
+    }
+
+    async function addEmail(){
+      const input = document.getElementById('newEmail');
+      const email = input.value.trim();
+      if(!email){ setEmailMsg('メールアドレスを入力してください'); return; }
+      setEmailMsg('追加中...');
+      try{
+        await api('/api/emails',{
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({email})
+        });
+        input.value = '';
+        await loadEmails();
+        setEmailMsg('追加しました: ' + email);
+      }catch(e){ setEmailMsg('追加失敗: ' + e.message); }
+    }
+
+    async function removeEmail(evt, email){
+      const btn = evt.currentTarget || evt.target;
+      btn.disabled = true;
+      setEmailMsg('削除中...');
+      try{
+        await api('/api/emails',{
+          method:'DELETE', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({email})
+        });
+        await loadEmails();
+        setEmailMsg('削除しました: ' + email);
+      }catch(e){
+        setEmailMsg('削除失敗: ' + e.message);
+        btn.disabled = false;
       }
     }
 

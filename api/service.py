@@ -134,9 +134,31 @@ class TWProphetWebService:
         with self._lock:
             return set(_load_json_list(config.WEEKLY_JSON))
 
+    def set_weekly(self, barcode: str, weekly: bool) -> None:
+        with self._lock:
+            current = set(_load_json_list(config.WEEKLY_JSON))
+            if weekly:
+                current.add(barcode)
+            else:
+                current.discard(barcode)
+            _save_json_list(config.WEEKLY_JSON, sorted(current))
+
     def get_email_list(self) -> list[str]:
         with self._lock:
             return _load_json_list(config.EMAIL_JSON)
+
+    def add_email(self, email: str) -> None:
+        with self._lock:
+            current = _load_json_list(config.EMAIL_JSON)
+            if email not in current:
+                current.append(email)
+                _save_json_list(config.EMAIL_JSON, current)
+
+    def remove_email(self, email: str) -> None:
+        with self._lock:
+            current = _load_json_list(config.EMAIL_JSON)
+            current = [e for e in current if e != email]
+            _save_json_list(config.EMAIL_JSON, current)
 
     # ------------------------------------------------------------------
     # 通知設定
