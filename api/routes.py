@@ -40,6 +40,13 @@ class WeeklyRequest(BaseModel):
 class EmailRequest(BaseModel):
     email: str
 
+class SmtpConfigRequest(BaseModel):
+    smtp_server: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    username: str = ""
+    from_addr: str = ""
+    password: str | None = None
+
 class NotifySettingsRequest(BaseModel):
     enabled: bool | None = None
     reminder_days: int | None = None
@@ -213,6 +220,33 @@ def add_email(req: EmailRequest) -> dict[str, Any]:
 def remove_email(req: EmailRequest) -> dict[str, Any]:
     try:
         _s().remove_email(req.email.strip())
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# SMTP 設定
+# ---------------------------------------------------------------------------
+
+@router.get("/api/smtp_config")
+def smtp_config() -> dict[str, Any]:
+    try:
+        return _s().get_smtp_config()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/smtp_config")
+def save_smtp_config(req: SmtpConfigRequest) -> dict[str, Any]:
+    try:
+        _s().save_smtp_config(
+            smtp_server=req.smtp_server.strip(),
+            smtp_port=req.smtp_port,
+            username=req.username.strip(),
+            from_addr=req.from_addr.strip(),
+            password=req.password,
+        )
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -509,16 +543,78 @@ _HTML_TEMPLATE = r"""<!doctype html>
 
   <!-- メール管理タブ -->
   <div class="tabPane" id="pane-email">
-    <div style="flex:1 1 auto;min-height:0;padding:12px;box-sizing:border-box;display:flex;flex-direction:column;max-width:600px;">
-      <section class="card" style="flex:1 1 auto;">
-        <div style="font-weight:600;margin-bottom:12px;">在庫減少通知メールリスト</div>
+    <div style="flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px;box-sizing:border-box;align-items:start;">
+
+      <!-- 送信先リスト -->
+      <section class="card">
+        <div style="font-weight:600;margin-bottom:12px;">通知メール送信先リスト</div>
         <div class="muted" style="font-size:12px;margin-bottom:12px;">このリストに登録したアドレスに在庫減少通知メールが送信されます。</div>
         <div style="display:flex;gap:8px;margin-bottom:12px;">
           <input id="newEmail" placeholder="追加するメールアドレス" style="flex:1;" onkeydown="if(event.key==='Enter') addEmail()" />
           <button class="secondary" onclick="addEmail()">追加</button>
         </div>
-        <div id="emailList" class="list" style="flex:1 1 auto;min-height:120px;"></div>
+        <div id="emailList" class="list" style="min-height:120px;"></div>
         <div id="emailMsg" class="muted" style="margin-top:8px;font-size:13px;"></div>
+      </section>
+
+      <!-- SMTP 設定 -->
+      <section class="card">
+        <div style="font-weight:600;margin-bottom:4px;">送信元メール設定（SMTP）</div>
+        <div class="muted" style="font-size:12px;margin-bottom:14px;">メールの送信元アカウントを設定します。</div>
+
+        <!-- Gmail案内 -->
+        <details style="margin-bottom:14px;">
+          <summary style="cursor:pointer;color:#80FFEA;font-size:13px;font-weight:600;">
+            Gmail を使う場合 — アプリパスワードの取得手順
+          </summary>
+          <div style="margin-top:10px;padding:12px;background:#1E1E2F;border-radius:10px;font-size:12px;line-height:1.8;color:#C8B8FF;">
+            <b>前提:</b> Google アカウントで 2段階認証が有効になっていること<br>
+            <br>
+            <b>手順:</b><br>
+            1. <a href="https://myaccount.google.com/security" target="_blank" rel="noopener" style="color:#80FFEA;">myaccount.google.com/security</a> を開く<br>
+            2. 「2段階認証プロセス」をクリック<br>
+            3. 下にスクロールして「アプリパスワード」をクリック<br>
+            4. アプリ名に「TW_Prophet」など任意の名前を入力して「作成」<br>
+            5. 表示された <b>16文字のパスワード</b>（スペース不要）を下の「パスワード」欄に貼り付ける<br>
+            <br>
+            <b>設定値:</b><br>
+            SMTPサーバー: <code style="background:#2a2a3e;padding:1px 5px;border-radius:4px;">smtp.gmail.com</code><br>
+            ポート: <code style="background:#2a2a3e;padding:1px 5px;border-radius:4px;">587</code><br>
+            ユーザー名: <code style="background:#2a2a3e;padding:1px 5px;border-radius:4px;">your.address@gmail.com</code>
+          </div>
+        </details>
+
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div>
+            <div class="infoLabel" style="margin-bottom:4px;">SMTPサーバー</div>
+            <input id="smtpServer" value="smtp.gmail.com" />
+          </div>
+          <div>
+            <div class="infoLabel" style="margin-bottom:4px;">ポート</div>
+            <input id="smtpPort" type="number" value="587" style="width:110px;" />
+          </div>
+          <div>
+            <div class="infoLabel" style="margin-bottom:4px;">ユーザー名（メールアドレス）</div>
+            <input id="smtpUser" placeholder="your.address@gmail.com" />
+          </div>
+          <div>
+            <div class="infoLabel" style="margin-bottom:4px;">送信元表示アドレス（空欄=ユーザー名と同じ）</div>
+            <input id="smtpFrom" placeholder="省略可" />
+          </div>
+          <div>
+            <div class="infoLabel" style="margin-bottom:4px;">パスワード / アプリパスワード</div>
+            <div style="display:flex;gap:8px;">
+              <input id="smtpPass" type="password" placeholder="変更しない場合は空欄のまま" style="flex:1;" />
+              <button class="sm secondary" onclick="togglePassVis()" id="btnPassVis">表示</button>
+            </div>
+            <div id="smtpPassStatus" class="muted" style="font-size:12px;margin-top:4px;"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="secondary" onclick="saveSmtpConfig()">保存</button>
+            <button onclick="testSmtp()">テスト送信</button>
+          </div>
+        </div>
+        <div id="smtpMsg" class="muted" style="margin-top:10px;font-size:13px;white-space:pre-wrap;"></div>
       </section>
     </div>
   </div>
@@ -1025,6 +1121,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
         const j = await r.json();
         renderEmailList(j.emails || []);
       }catch(e){ setEmailMsg('取得失敗: ' + e.message); }
+      loadSmtpConfig().catch(()=>{});
     }
 
     function renderEmailList(emails){
@@ -1076,6 +1173,65 @@ _HTML_TEMPLATE = r"""<!doctype html>
         setEmailMsg('削除失敗: ' + e.message);
         btn.disabled = false;
       }
+    }
+
+    /* -------- SMTP設定 -------- */
+    function setSmtpMsg(t){ document.getElementById('smtpMsg').textContent = t||''; }
+
+    async function loadSmtpConfig(){
+      try{
+        const r = await api('/api/smtp_config');
+        const j = await r.json();
+        document.getElementById('smtpServer').value = j.smtp_server || 'smtp.gmail.com';
+        document.getElementById('smtpPort').value   = j.smtp_port   || 587;
+        document.getElementById('smtpUser').value   = j.username    || '';
+        document.getElementById('smtpFrom').value   = j.from_addr   || '';
+        document.getElementById('smtpPass').value   = '';
+        document.getElementById('smtpPassStatus').textContent =
+          j.password_set ? '✓ パスワード設定済み（変更する場合のみ入力）' : '未設定';
+      }catch(e){ setSmtpMsg('SMTP設定の取得失敗: '+e.message); }
+    }
+
+    function togglePassVis(){
+      const inp = document.getElementById('smtpPass');
+      const btn = document.getElementById('btnPassVis');
+      if(inp.type==='password'){ inp.type='text';  btn.textContent='隠す'; }
+      else                     { inp.type='password'; btn.textContent='表示'; }
+    }
+
+    async function saveSmtpConfig(){
+      setSmtpMsg('保存中...');
+      const body = {
+        smtp_server: document.getElementById('smtpServer').value.trim(),
+        smtp_port:   parseInt(document.getElementById('smtpPort').value||'587',10),
+        username:    document.getElementById('smtpUser').value.trim(),
+        from_addr:   document.getElementById('smtpFrom').value.trim(),
+        password:    document.getElementById('smtpPass').value || null,
+      };
+      try{
+        await api('/api/smtp_config',{
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(body)
+        });
+        setSmtpMsg('保存しました。');
+        await loadSmtpConfig();
+      }catch(e){ setSmtpMsg('保存失敗: '+e.message); }
+    }
+
+    async function testSmtp(){
+      setSmtpMsg('テスト送信中...');
+      try{
+        const r = await api('/api/notify_run',{
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({force:true})
+        });
+        const j = await r.json();
+        if(j.ok){
+          setSmtpMsg('テスト送信が完了しました（通知対象がない場合はメールは届きません）。\n送信先: 送信先リストに登録されたアドレス');
+        }else{
+          setSmtpMsg('送信失敗: '+(j.error||'unknown'));
+        }
+      }catch(e){ setSmtpMsg('送信失敗: '+e.message); }
     }
 
     /* -------- 初期化 -------- */

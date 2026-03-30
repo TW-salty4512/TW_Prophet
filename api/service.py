@@ -147,6 +147,36 @@ class TWProphetWebService:
         with self._lock:
             return _load_json_list(config.EMAIL_JSON)
 
+    # ------------------------------------------------------------------
+    # SMTP 設定
+    # ------------------------------------------------------------------
+    def get_smtp_config(self) -> dict[str, Any]:
+        """SMTP設定を返す。パスワードは設定済みかどうかのフラグのみ返す。"""
+        with self._lock:
+            d = _load_json_dict(config.SMTP_CONFIG_JSON)
+        return {
+            "smtp_server": d.get("smtp_server", "smtp.gmail.com"),
+            "smtp_port":   int(d.get("smtp_port", 587)),
+            "username":    d.get("username",  ""),
+            "from_addr":   d.get("from_addr", ""),
+            "password_set": bool(d.get("password", "")),
+        }
+
+    def save_smtp_config(self, smtp_server: str, smtp_port: int,
+                         username: str, from_addr: str,
+                         password: str | None) -> None:
+        """SMTP設定を保存する。password が None または空文字なら既存パスワードを保持。"""
+        with self._lock:
+            d = _load_json_dict(config.SMTP_CONFIG_JSON)
+            d["smtp_server"] = smtp_server
+            d["smtp_port"]   = int(smtp_port)
+            d["username"]    = username
+            d["from_addr"]   = from_addr or username
+            if password:
+                d["password"] = password
+            _save_json_dict(config.SMTP_CONFIG_JSON, d)
+        self.email_notifier.reload()
+
     def add_email(self, email: str) -> None:
         with self._lock:
             current = _load_json_list(config.EMAIL_JSON)

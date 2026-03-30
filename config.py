@@ -86,6 +86,8 @@ NOTIFY_STATE_JSON   = Path(_get("notify_state_json",  "TW_NOTIFY_STATE_JSON",
                                 str(DATA_DIR / "notify_state.json")))
 RETRAIN_STATE_JSON  = Path(_get("retrain_state_json", "TW_RETRAIN_STATE_JSON",
                                 str(DATA_DIR / "retrain_state.json")))
+SMTP_CONFIG_JSON    = Path(_get("smtp_config_json",  "TW_SMTP_CONFIG_JSON",
+                                str(CONFIG_DIR / "smtp_config.json")))
 
 # ---------------------------------------------------------------------------
 # MDB パス（社内ファイルサーバーまたはローカル）

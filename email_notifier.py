@@ -15,13 +15,30 @@ from email.utils import formatdate
 
 class EmailNotifier:
     def __init__(self):
-        # Gmail の例
-        self.smtp_server = os.getenv("TW_SMTP_SERVER", "smtp.gmail.com")
-        self.smtp_port = int(os.getenv("TW_SMTP_PORT", "587"))
-        self.username = os.getenv("TW_SMTP_USER", "")
-        self.password = os.getenv("TW_SMTP_PASS", "")
-        self.from_addr = os.getenv("TW_SMTP_FROM", "") or self.username
+        cfg = self._load_smtp_config()
+        self.smtp_server = os.getenv("TW_SMTP_SERVER", cfg.get("smtp_server", "smtp.gmail.com"))
+        self.smtp_port   = int(os.getenv("TW_SMTP_PORT", str(cfg.get("smtp_port", 587))))
+        self.username    = os.getenv("TW_SMTP_USER",   cfg.get("username",    ""))
+        self.password    = os.getenv("TW_SMTP_PASS",   cfg.get("password",    ""))
+        self.from_addr   = os.getenv("TW_SMTP_FROM",   cfg.get("from_addr",   "")) or self.username
         self.to_addrs: list[str] = []
+
+    def reload(self) -> None:
+        """smtp_config.json の変更をインスタンスに反映する。"""
+        self.__init__()
+
+    @staticmethod
+    def _load_smtp_config() -> dict:
+        try:
+            import config as _cfg
+            p = _cfg.SMTP_CONFIG_JSON
+            if p.exists():
+                import json
+                with p.open(encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return {}
 
     def set_to_addrs(self, addr_list):
         """送信先の設定
