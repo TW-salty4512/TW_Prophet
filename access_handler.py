@@ -12,10 +12,10 @@ from typing import Any, Dict, Optional
 import pandas as pd
 import pyodbc
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine, URL
 
 # Access ODBC は接続数が少ないため、プールせず毎回確実にクローズする
 pyodbc.pooling = False
-from sqlalchemy.engine import Engine
 
 import config
 
@@ -55,9 +55,14 @@ class AccessHandler:
         if not conf.get("database"):
             return None
         try:
-            url = (
-                f"mysql+mysqlconnector://{conf['user']}:{conf['password']}"
-                f"@{conf['host']}:{conf['port']}/{conf['database']}?charset=utf8mb4"
+            url = URL.create(
+                drivername="mysql+mysqlconnector",
+                username=conf["user"],
+                password=conf["password"],
+                host=conf["host"],
+                port=int(conf["port"]),
+                database=conf["database"],
+                query={"charset": "utf8mb4"},
             )
             return create_engine(url, pool_pre_ping=True, pool_recycle=3600)
         except Exception as e:
