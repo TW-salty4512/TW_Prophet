@@ -434,7 +434,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
   <header>
     <div style="font-weight:700;">TW_Prophet Web</div>
     <div class="muted">File-Server常駐版</div>
-    <div class="versionBadge">Ver 3.3.1</div>
+    <div class="versionBadge">Ver 3.3.2</div>
     <div class="navlinks">
 <!-- NAV_LINKS -->
     </div>
