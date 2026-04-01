@@ -12,6 +12,9 @@ from typing import Any, Dict, Optional
 import pandas as pd
 import pyodbc
 from sqlalchemy import create_engine
+
+# Access ODBC は接続数が少ないため、プールせず毎回確実にクローズする
+pyodbc.pooling = False
 from sqlalchemy.engine import Engine
 
 import config
@@ -68,8 +71,10 @@ class AccessHandler:
         try:
             query = "SELECT 出荷完了日, バーコード, 数量, 顧客ID FROM 出荷明細テーブル"
             conn = pyodbc.connect(self.shipment_conn_str)
-            data = pd.read_sql_query(query, conn)
-            conn.close()
+            try:
+                data = pd.read_sql_query(query, conn)
+            finally:
+                conn.close()
             data["出荷完了日"] = pd.to_datetime(data["出荷完了日"], errors="coerce")
             data = data[data["数量"] > 0]
             return data
@@ -92,8 +97,10 @@ class AccessHandler:
                 FROM 出荷後在庫数確認クエリ
             """
             conn = pyodbc.connect(self.post_shipment_conn_str)
-            df = pd.read_sql_query(query, conn)
-            conn.close()
+            try:
+                df = pd.read_sql_query(query, conn)
+            finally:
+                conn.close()
 
             return df[df["バーコード"].isin(barcodes_in_shipment)].copy()
         except Exception as e:
@@ -148,20 +155,21 @@ class AccessHandler:
     def _get_parts_info_standard(self, product_barcode: str) -> pd.DataFrame:
         """通常パターン: 製造管理.mdb から製造品ID → 部品一覧を取得。"""
         conn = pyodbc.connect(self.manufacture_conn_str)
-        query_id = "SELECT 製造品ID FROM 製造品型名テーブル WHERE 販売商品名 = ?"
-        df_id = pd.read_sql_query(query_id, conn, params=[product_barcode])
-        if df_id.empty:
-            conn.close()
-            return pd.DataFrame(columns=["部品名", "在庫数"])
+        try:
+            query_id = "SELECT 製造品ID FROM 製造品型名テーブル WHERE 販売商品名 = ?"
+            df_id = pd.read_sql_query(query_id, conn, params=[product_barcode])
+            if df_id.empty:
+                return pd.DataFrame(columns=["部品名", "在庫数"])
 
-        manufacture_id = int(df_id.iloc[0]["製造品ID"])
-        query_parts = """
-            SELECT 製造品構成クエリ.製品名, 製造品構成クエリ.在庫数
-            FROM 製造品構成クエリ
-            WHERE 製造品ID = ?
-        """
-        df_parts = pd.read_sql_query(query_parts, conn, params=[manufacture_id])
-        conn.close()
+            manufacture_id = int(df_id.iloc[0]["製造品ID"])
+            query_parts = """
+                SELECT 製造品構成クエリ.製品名, 製造品構成クエリ.在庫数
+                FROM 製造品構成クエリ
+                WHERE 製造品ID = ?
+            """
+            df_parts = pd.read_sql_query(query_parts, conn, params=[manufacture_id])
+        finally:
+            conn.close()
 
         if df_parts.empty:
             return pd.DataFrame(columns=["部品名", "在庫数"])
