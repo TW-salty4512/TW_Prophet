@@ -25,6 +25,10 @@ evaluation_results_*.csv
 
 # DB 接続情報（例: mysql_config.example.json は追跡対象）
 mysql_config.json
+# 社内専用インストーラ用の実認証情報ファイル（絶対にコミットしない）
+mysql_config.internal.json
+# 社内専用インストーラ成果物（社内配布のみ・GitHub Release には上げない）
+installer/Output/TW_Prophet_Internal_*.exe
 
 # アプリ設定（例: settings.example.json は追跡対象）
 settings.json
