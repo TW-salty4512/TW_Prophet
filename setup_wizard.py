@@ -116,9 +116,16 @@ class SetupWizard(tk.Tk):
         self.v_models_dir     = tk.StringVar(value=str(PROGRAMDATA / "TW_Prophet" / "data" / "models"))
         self.v_python_exe     = tk.StringVar(value=_default_python_exe())
         self.v_auto_start     = tk.BooleanVar(value=True)
+        self.v_smtp_skip      = tk.BooleanVar(value=False)
+        self.v_smtp_server    = tk.StringVar(value="smtp.gmail.com")
+        self.v_smtp_port      = tk.IntVar(value=587)
+        self.v_smtp_user      = tk.StringVar(value="")
+        self.v_smtp_from      = tk.StringVar(value="")
+        self.v_smtp_pass      = tk.StringVar(value="")
 
         # ページ管理
         self._pages: list[tk.Frame] = []
+        self._smtp_widgets: list[tk.Widget] = []
         self._current = 0
 
         self._build_ui()
@@ -142,6 +149,7 @@ class SetupWizard(tk.Tk):
             self._page_mysql(),
             self._page_dirs(),
             self._page_startup(),
+            self._page_smtp(),
             self._page_confirm(),
         ]
         for p in self._pages:
@@ -207,7 +215,7 @@ class SetupWizard(tk.Tk):
 
     def _page_mode(self) -> tk.Frame:
         p = self._page()
-        tk.Label(p, text="ステップ 1 / 5  –  動作モード", bg=COLOR_BG, fg=COLOR_FG,
+        tk.Label(p, text="ステップ 1 / 6  –  動作モード", bg=COLOR_BG, fg=COLOR_FG,
                  font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 10))
         lf = self._lf(p, "データ取得方法")
         for label in MODES:
@@ -222,7 +230,7 @@ class SetupWizard(tk.Tk):
 
     def _page_mdb(self) -> tk.Frame:
         p = self._page()
-        tk.Label(p, text="ステップ 2 / 5  –  MDB ファイルパス", bg=COLOR_BG, fg=COLOR_FG,
+        tk.Label(p, text="ステップ 2 / 6  –  MDB ファイルパス", bg=COLOR_BG, fg=COLOR_FG,
                  font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 10))
         lf = self._lf(p, "MDB ベースディレクトリ（UNCパス可）")
         self._entry(lf, self.v_mdb_base).pack(fill="x", pady=2)
@@ -246,7 +254,7 @@ class SetupWizard(tk.Tk):
 
     def _page_mysql(self) -> tk.Frame:
         p = self._page()
-        tk.Label(p, text="ステップ 3 / 5  –  MySQL 接続（任意）", bg=COLOR_BG, fg=COLOR_FG,
+        tk.Label(p, text="ステップ 3 / 6  –  MySQL 接続（任意）", bg=COLOR_BG, fg=COLOR_FG,
                  font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 10))
         lf = self._lf(p, "MySQL 接続設定（不要な場合は空のままでOK）")
         for label, var in [
@@ -267,7 +275,7 @@ class SetupWizard(tk.Tk):
 
     def _page_dirs(self) -> tk.Frame:
         p = self._page()
-        tk.Label(p, text="ステップ 4 / 5  –  保存先・Python", bg=COLOR_BG, fg=COLOR_FG,
+        tk.Label(p, text="ステップ 4 / 6  –  保存先・Python", bg=COLOR_BG, fg=COLOR_FG,
                  font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 10))
 
         lf = self._lf(p, "Web サーバー")
@@ -300,7 +308,7 @@ class SetupWizard(tk.Tk):
 
     def _page_startup(self) -> tk.Frame:
         p = self._page()
-        tk.Label(p, text="ステップ 5 / 5  –  自動起動設定", bg=COLOR_BG, fg=COLOR_FG,
+        tk.Label(p, text="ステップ 5 / 6  –  自動起動設定", bg=COLOR_BG, fg=COLOR_FG,
                  font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 10))
         lf = self._lf(p, "Windows 起動時に自動起動する")
         tk.Checkbutton(lf, text="タスクスケジューラに自動起動タスクを登録する（推奨）",
@@ -315,6 +323,52 @@ class SetupWizard(tk.Tk):
                  bg=COLOR_PANEL, fg="#E5CAFF", justify="left").pack(anchor="w", pady=(6, 0))
         return p
 
+    def _page_smtp(self) -> tk.Frame:
+        p = self._page()
+        tk.Label(p, text="ステップ 6 / 6  –  メール通知設定（任意）", bg=COLOR_BG, fg=COLOR_FG,
+                 font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 10))
+
+        lf_skip = self._lf(p, "メール通知")
+        tk.Checkbutton(lf_skip, text="メール通知を使用しない（スキップ）",
+                       variable=self.v_smtp_skip,
+                       bg=COLOR_PANEL, fg=COLOR_FG, selectcolor=COLOR_BG,
+                       activebackground=COLOR_PANEL, activeforeground=COLOR_FG,
+                       command=self._on_smtp_skip_change).pack(anchor="w")
+
+        lf = self._lf(p, "SMTP 設定（Gmail の場合はアプリパスワードを使用してください）")
+        self._smtp_widgets = []
+        for label, var in [
+            ("SMTPサーバー",           self.v_smtp_server),
+            ("SMTPポート",             self.v_smtp_port),
+            ("送信元アドレス (Gmail)", self.v_smtp_user),
+            ("表示名アドレス（省略可）", self.v_smtp_from),
+        ]:
+            w = self._row(lf, label, self._entry, textvariable=var)
+            self._smtp_widgets.append(w)
+
+        f_pw = tk.Frame(lf, bg=COLOR_PANEL)
+        f_pw.pack(fill="x", pady=2)
+        tk.Label(f_pw, text="アプリパスワード", width=22, anchor="w",
+                 bg=COLOR_PANEL, fg=COLOR_FG).pack(side="left")
+        pw_entry = tk.Entry(f_pw, textvariable=self.v_smtp_pass, show="*",
+                            bg="#1E1E2F", fg=COLOR_FG, insertbackground=COLOR_FG, relief="flat")
+        pw_entry.pack(side="left", fill="x", expand=True, padx=4)
+        self._smtp_widgets.append(pw_entry)
+
+        tk.Label(lf,
+                 text="Gmail の場合: Googleアカウント → セキュリティ → アプリパスワード\n"
+                      "で生成した 16 文字のパスワードを入力してください。",
+                 bg=COLOR_PANEL, fg="#E5CAFF", justify="left").pack(anchor="w", pady=(4, 0))
+        return p
+
+    def _on_smtp_skip_change(self) -> None:
+        state = "disabled" if self.v_smtp_skip.get() else "normal"
+        for w in self._smtp_widgets:
+            try:
+                w.configure(state=state)
+            except Exception:
+                pass
+
     def _page_confirm(self) -> tk.Frame:
         p = self._page()
         tk.Label(p, text="設定確認", bg=COLOR_BG, fg=COLOR_FG,
@@ -326,10 +380,22 @@ class SetupWizard(tk.Tk):
 
     def _update_confirm_text(self) -> None:
         txt = self._build_settings_dict()
-        s = json.dumps(txt, ensure_ascii=False, indent=2)
+        lines = ["以下の内容で settings.json を作成します:\n\n",
+                 json.dumps(txt, ensure_ascii=False, indent=2)]
+        if not self.v_smtp_skip.get() and (self.v_smtp_user.get().strip() or self.v_smtp_pass.get()):
+            smtp = {
+                "smtp_server": self.v_smtp_server.get().strip(),
+                "smtp_port":   self.v_smtp_port.get(),
+                "username":    self.v_smtp_user.get().strip(),
+                "from_addr":   self.v_smtp_from.get().strip() or self.v_smtp_user.get().strip(),
+                "password":    "****" if self.v_smtp_pass.get() else "(未設定)",
+            }
+            lines.append("\n\nsmtp_config.json:\n" + json.dumps(smtp, ensure_ascii=False, indent=2))
+        else:
+            lines.append("\n\nメール通知: スキップ（設定しない）")
         self._confirm_text.configure(state="normal")
         self._confirm_text.delete("1.0", "end")
-        self._confirm_text.insert("end", "以下の内容で settings.json を作成します:\n\n" + s)
+        self._confirm_text.insert("end", "".join(lines))
         self._confirm_text.configure(state="disabled")
 
     # ------------------------------------------------------------------
@@ -408,6 +474,18 @@ class SetupWizard(tk.Tk):
                 mysql_path = SETTINGS_DIR / "mysql_config.json"
                 with mysql_path.open("w", encoding="utf-8") as f:
                     json.dump(mysql, f, ensure_ascii=False, indent=2)
+
+            if not self.v_smtp_skip.get() and (self.v_smtp_user.get().strip() or self.v_smtp_pass.get()):
+                smtp_cfg = {
+                    "smtp_server": self.v_smtp_server.get().strip(),
+                    "smtp_port":   self.v_smtp_port.get(),
+                    "username":    self.v_smtp_user.get().strip(),
+                    "from_addr":   self.v_smtp_from.get().strip() or self.v_smtp_user.get().strip(),
+                    "password":    self.v_smtp_pass.get(),
+                }
+                smtp_path = SETTINGS_DIR / "smtp_config.json"
+                with smtp_path.open("w", encoding="utf-8") as f:
+                    json.dump(smtp_cfg, f, ensure_ascii=False, indent=2)
 
             if self.v_auto_start.get():
                 self._register_task()

@@ -394,7 +394,6 @@ class TWProphetWebService:
         if (not force) and (not settings.get("enabled", True)):
             return {"ok": True, "skipped": True, "reason": "notify disabled"}
 
-        reminder_days = int(settings.get("reminder_days", 90))
         now = datetime.now()
 
         self.refresh_db()
@@ -454,44 +453,51 @@ class TWProphetWebService:
                     alert_kind = "半年前"
 
                 key = f"{bc}||{part_name}"
+                total_supply = float(product_inv + part_inv)
+
                 if alert_kind is None:
+                    # アラート条件を外れた → 状態クリア
                     items.pop(key, None)
                     continue
 
-                total_supply = float(product_inv + part_inv)
                 rec = items.get(key)
                 if rec is None:
                     rec = {
                         "barcode": bc, "part_name": part_name,
-                        "baseline_supply": total_supply, "last_notified_supply": total_supply,
-                        "last_notified_at": None, "reset_pending": False,
-                        "ever_notified": False, "alert_active_since": _now_iso(),
+                        "last_seen_supply": total_supply,
+                        "first_notified_at": None,
+                        "month1_notified": False,
+                        "month6_notified": False,
                     }
                     items[key] = rec
 
-                last_notified_supply = float(rec.get("last_notified_supply", total_supply))
-                if total_supply > last_notified_supply + 1e-9:
+                last_seen_supply = float(rec.get("last_seen_supply", total_supply))
+                if total_supply > last_seen_supply + 1e-9:
+                    # 在庫が増加 → 通知サイクルをリセット
                     rec.update({
-                        "baseline_supply": total_supply, "last_notified_supply": total_supply,
-                        "last_notified_at": None, "reset_pending": True,
+                        "last_seen_supply": total_supply,
+                        "first_notified_at": None,
+                        "month1_notified": False,
+                        "month6_notified": False,
                     })
                     continue
 
-                last_notified_at = _parse_iso(rec.get("last_notified_at"))
-                ever_notified    = bool(rec.get("ever_notified", False))
-                reset_pending    = bool(rec.get("reset_pending", False))
-                baseline_supply  = float(rec.get("baseline_supply", total_supply))
-                remind_due       = last_notified_at is not None and (now - last_notified_at).days >= reminder_days
+                rec["last_seen_supply"] = total_supply
 
-                send_due = (not ever_notified) and (rec.get("last_notified_at") is None)
-                if ever_notified and not remind_due:
-                    send_due = False
-                if reset_pending:
-                    send_due = total_supply < baseline_supply - 1e-9
-                if remind_due:
-                    send_due = True
+                first_notified_at = _parse_iso(rec.get("first_notified_at"))
+                month1_notified   = bool(rec.get("month1_notified", False))
+                month6_notified   = bool(rec.get("month6_notified", False))
 
-                if not send_due:
+                # 送信判定: 初回 → 1ヶ月後 → 6ヶ月後
+                notify_reason = None
+                if first_notified_at is None:
+                    notify_reason = "initial"
+                elif not month1_notified and now >= first_notified_at + timedelta(days=30):
+                    notify_reason = "1month"
+                elif not month6_notified and now >= first_notified_at + timedelta(days=180):
+                    notify_reason = "6month"
+
+                if notify_reason is None:
                     continue
 
                 pending.append({
@@ -500,7 +506,7 @@ class TWProphetWebService:
                     "total_supply": total_supply,
                     "days_6mo": days_6mo, "days_1mo": days_1mo,
                     "alert_kind": alert_kind, "mode": "weekly" if is_weekly else "monthly",
-                    "key": key,
+                    "key": key, "notify_reason": notify_reason,
                 })
 
         with self._lock:
@@ -527,7 +533,6 @@ class TWProphetWebService:
 
         html_body = f"""<html><head><meta charset='utf-8'></head><body>
 <h2>【TW_Prophet】部品在庫減少通知</h2>
-<p>- リマインド: {reminder_days}日ごと</p>
 <table border='1' cellspacing='0' cellpadding='4' style='border-collapse:collapse;'>
 <tr><th>製品バーコード</th><th>部品名</th><th>総在庫</th><th>製品在庫</th>
     <th>部品在庫</th><th>半年残日数</th><th>1ヶ月残日数</th><th>種別</th><th>モデル</th></tr>
@@ -551,11 +556,13 @@ class TWProphetWebService:
                 rec2 = items2.get(x["key"])
                 if not rec2:
                     continue
-                rec2.update({
-                    "last_notified_at": now_iso, "last_notified_supply": float(x["total_supply"]),
-                    "baseline_supply": float(x["total_supply"]), "reset_pending": False,
-                    "ever_notified": True, "last_alert_kind": x["alert_kind"],
-                })
+                notify_reason = x["notify_reason"]
+                if notify_reason == "initial":
+                    rec2["first_notified_at"] = now_iso
+                elif notify_reason == "1month":
+                    rec2["month1_notified"] = True
+                elif notify_reason == "6month":
+                    rec2["month6_notified"] = True
             state2["items"] = items2
             self._save_notify_state(state2)
 
