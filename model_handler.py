@@ -822,16 +822,44 @@ class ModelHandler:
             model_payload=payload,
         )
 
+    # Cyberpunk 2077 plot palette
+    _CP_BG      = "#06060E"
+    _CP_CARD    = "#0C0C1A"
+    _CP_YELLOW  = "#FCE300"
+    _CP_CYAN    = "#00E5FF"
+    _CP_GRID    = "#1A1A2E"
+    _CP_TEXT    = "#8090A0"
+
+    def _apply_cyberpunk_axes(self, ax):
+        """Apply Cyberpunk 2077 style to a matplotlib Axes."""
+        ax.set_facecolor(self._CP_CARD)
+        ax.tick_params(colors=self._CP_TEXT, labelsize=8)
+        for spine in ax.spines.values():
+            spine.set_edgecolor(self._CP_GRID)
+        ax.xaxis.label.set_color(self._CP_TEXT)
+        ax.yaxis.label.set_color(self._CP_TEXT)
+        ax.grid(True, color=self._CP_GRID, linewidth=0.5, alpha=0.8, zorder=0)
+
     def _plot_backtest_result(self, result: Dict[str, Any], title_prefix: str) -> Figure:
         fig = Figure(figsize=(6, 4), dpi=100)
+        fig.patch.set_facecolor(self._CP_BG)
         ax = fig.add_subplot(111)
-        ax.plot(result["dates"], result["actual"], label="Actual", color="tab:green")
-        ax.plot(result["dates"], result["pred"], label="Forecast", color="tab:red", linestyle="--")
+        self._apply_cyberpunk_axes(ax)
+        ax.plot(result["dates"], result["actual"],
+                label="ACTUAL", color=self._CP_YELLOW, linewidth=2, zorder=3)
+        ax.plot(result["dates"], result["pred"],
+                label="FORECAST", color=self._CP_CYAN, linewidth=2, linestyle="--", zorder=3)
+        # glow effect
+        ax.fill_between(result["dates"], result["actual"],
+                        alpha=0.07, color=self._CP_YELLOW, zorder=2)
         ax.set_title(
-            f"{title_prefix} RMSE={result['rmse']:.2f} "
-            f"MAE={result['mae']:.2f} sMAPE={result['smape']:.1f}%"
+            f"{title_prefix}  RMSE={result['rmse']:.2f}  "
+            f"MAE={result['mae']:.2f}  sMAPE={result['smape']:.1f}%",
+            color=self._CP_YELLOW, fontsize=10, fontweight="bold", pad=10,
         )
-        ax.legend()
+        leg = ax.legend(facecolor=self._CP_BG, edgecolor=self._CP_YELLOW,
+                        fontsize=9, labelcolor=[self._CP_YELLOW, self._CP_CYAN])
+        leg.get_frame().set_alpha(0.9)
         return fig
 
     def backtest_weekly_1month(self, shipment_data, barcode):
@@ -1115,14 +1143,20 @@ class ModelHandler:
         fig = None
         if return_fig:
             fig = Figure(figsize=(5, 3), dpi=100)
+            fig.patch.set_facecolor(self._CP_BG)
             ax = fig.add_subplot(111)
-            ax.plot(feat["ds"], y_all, label="Actual", color="tab:blue")
-            ax.plot(feat["ds"], y_pred, label="Forecast", color="tab:red", linestyle="--")
+            self._apply_cyberpunk_axes(ax)
+            ax.plot(feat["ds"], y_all, label="ACTUAL", color=self._CP_YELLOW, linewidth=2, zorder=3)
+            ax.plot(feat["ds"], y_pred, label="FORECAST", color=self._CP_CYAN, linewidth=2, linestyle="--", zorder=3)
+            ax.fill_between(feat["ds"], y_all, alpha=0.07, color=self._CP_YELLOW, zorder=2)
             ax.set_title(
-                f"Weekly Full Backtest RMSE={m['rmse']:.2f} "
-                f"MAE={m['mae']:.2f} sMAPE={m['smape']:.1f}%"
+                f"Weekly Full Backtest  RMSE={m['rmse']:.2f}  "
+                f"MAE={m['mae']:.2f}  sMAPE={m['smape']:.1f}%",
+                color=self._CP_YELLOW, fontsize=9, fontweight="bold", pad=8,
             )
-            ax.legend()
+            leg = ax.legend(facecolor=self._CP_BG, edgecolor=self._CP_YELLOW,
+                            fontsize=8, labelcolor=[self._CP_YELLOW, self._CP_CYAN])
+            leg.get_frame().set_alpha(0.9)
         return fig
 
     def _get_product_inventory(self, inventory_data: pd.DataFrame, barcode: str) -> Optional[float]:

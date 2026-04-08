@@ -310,7 +310,8 @@ class TWProphetWebService:
         except Exception:
             pass
         try:
-            fig.savefig(buf, format="png", dpi=180, bbox_inches="tight", pad_inches=0.05)
+            fig.savefig(buf, format="png", dpi=180, bbox_inches="tight",
+                        pad_inches=0.05, facecolor=fig.get_facecolor())
         finally:
             try:
                 plt.close(fig)
