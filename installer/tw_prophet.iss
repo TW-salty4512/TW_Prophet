@@ -12,7 +12,7 @@
 ; 出力: installer\Output\TW_Prophet_Setup_x.x.x.exe
 
 #define AppName      "TW_Prophet"
-#define AppVersion   "3.3.3"
+#define AppVersion   "4.0.1"
 #define AppPublisher "TW-salty4512"
 #define AppURL       "https://github.com/TW-salty4512/TW_Prophet"
 ; このファイルの親 = project/

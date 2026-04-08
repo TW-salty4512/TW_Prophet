@@ -311,14 +311,45 @@ _HTML_TEMPLATE = r"""<!doctype html>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <style>
-    /* ===== CYBERPUNK 2077 THEME ===== */
+    /* ===== DARK (default) ===== */
     :root{
       --bg:#06060E; --card:#0C0C1A; --panel:#08080F;
       --yellow:#FCE300; --cyan:#00E5FF; --magenta:#FF003C; --orange:#FFA000;
       --text:#B8C4D0; --muted:#5A6A7A;
       --border-y:rgba(252,227,0,0.22); --border-c:rgba(0,229,255,0.22);
       --glow-y:rgba(252,227,0,0.12); --glow-c:rgba(0,229,255,0.12);
+      --header-bg:#0A0A14; --scanline:rgba(0,0,0,0.04);
+      --title-shadow:0 0 16px rgba(252,227,0,0.5),0 0 40px rgba(252,227,0,0.15);
+      --input-text:var(--cyan);
     }
+    /* ===== LIGHT ===== */
+    body.light{
+      --bg:#EEF0F5; --card:#FFFFFF; --panel:#F5F6FA;
+      --yellow:#B08C00; --cyan:#006E8A; --magenta:#B8002A; --orange:#A06800;
+      --text:#2A2E3A; --muted:#6A7080;
+      --border-y:rgba(160,130,0,0.22); --border-c:rgba(0,100,140,0.22);
+      --glow-y:rgba(160,130,0,0.06); --glow-c:rgba(0,100,140,0.06);
+      --header-bg:#FAFAFD; --scanline:transparent;
+      --title-shadow:none;
+      --input-text:#2A2E3A;
+    }
+    body.light::after{background:none !important;}
+    body.light header{border-bottom-color:rgba(0,0,0,0.08);box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+    body.light header>div:first-child{text-shadow:none;}
+    body.light .versionBadge{text-shadow:none;}
+    body.light .tabBar{background:var(--panel);border-bottom-color:rgba(0,0,0,0.08);}
+    body.light .tabBtn{background:var(--panel);}
+    body.light .tabBtn.active{background:var(--card);text-shadow:none;border-color:rgba(160,130,0,0.4);}
+    body.light .card{box-shadow:0 1px 6px rgba(0,0,0,0.06);border-top-color:rgba(160,130,0,0.3);}
+    body.light input{background:var(--panel);color:var(--text);border-color:rgba(0,0,0,0.1);border-left-color:rgba(0,100,140,0.3);}
+    body.light input::placeholder{color:#A0A8B0;}
+    body.light input:focus{box-shadow:0 0 6px rgba(0,100,140,0.12);}
+    body.light button:hover:not(:disabled){text-shadow:none;}
+    body.light .item:hover{background:#F0F1F5;}
+    body.light .item.sel{background:#F8F4E0;}
+    body.light ::-webkit-scrollbar-track{background:var(--panel);}
+    body.light ::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);}
+    body.light .plotFrame{border-color:rgba(0,0,0,0.08);box-shadow:none;}
     html,body{height:100%;}
     body{
       font-family:'Rajdhani','Segoe UI',system-ui,sans-serif;
@@ -328,7 +359,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
     /* scanline overlay */
     body::after{
       content:''; pointer-events:none; position:fixed; inset:0; z-index:9999;
-      background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px);
+      background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scanline) 2px,var(--scanline) 4px);
     }
     ::selection{background:rgba(252,227,0,0.3);color:#fff;}
     ::-webkit-scrollbar{width:6px;height:6px;}
@@ -341,12 +372,12 @@ _HTML_TEMPLATE = r"""<!doctype html>
       border-bottom:1px solid var(--border-y);
       box-shadow:0 2px 30px var(--glow-y);
       display:flex; gap:10px; align-items:center; flex:0 0 auto;
-      background:#0A0A14;
+      background:var(--header-bg);
     }
     header>div:first-child{
       font-size:17px; font-weight:700; color:var(--yellow);
       letter-spacing:.14em; text-transform:uppercase;
-      text-shadow:0 0 16px rgba(252,227,0,0.5),0 0 40px rgba(252,227,0,0.15);
+      text-shadow:var(--title-shadow);
     }
     .versionBadge{
       padding:2px 14px; border:1px solid var(--yellow);
@@ -416,7 +447,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
       width:100%;padding:8px 10px;border-radius:0;
       border:1px solid var(--border-c);
       border-left:2px solid rgba(0,229,255,0.45);
-      background:var(--panel);color:var(--cyan);box-sizing:border-box;
+      background:var(--panel);color:var(--input-text,var(--cyan));box-sizing:border-box;
       letter-spacing:.04em;font-family:'Share Tech Mono',monospace;
     }
     input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 10px var(--glow-c);}
@@ -543,13 +574,14 @@ _HTML_TEMPLATE = r"""<!doctype html>
   <header>
     <div>TW_PROPHET</div>
     <div class="muted" style="font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:.15em;">// DEMAND FORECAST SYSTEM</div>
-    <div class="versionBadge">Ver 3.3.3</div>
+    <div class="versionBadge">Ver 4.0.1</div>
     <div class="navlinks">
 <!-- NAV_LINKS -->
     </div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
       <button class="secondary" onclick="refreshDb()">DB再取得</button>
       <button class="danger" onclick="runNotify()">通知チェック</button>
+      <button id="themeToggle" class="sm" onclick="toggleTheme()" style="font-size:16px;padding:4px 10px;clip-path:none;border-color:var(--border-y);letter-spacing:0;">&#9789;</button>
     </div>
   </header>
 
@@ -673,14 +705,14 @@ _HTML_TEMPLATE = r"""<!doctype html>
 
         <!-- Gmail案内 -->
         <details style="margin-bottom:14px;">
-          <summary style="cursor:pointer;color:#80FFEA;font-size:13px;font-weight:600;">
+          <summary style="cursor:pointer;color:var(--cyan);font-size:13px;font-weight:600;">
             Gmail を使う場合 — アプリパスワードの取得手順
           </summary>
-          <div style="margin-top:10px;padding:12px;background:#1E1E2F;border-radius:10px;font-size:12px;line-height:1.8;color:#C8B8FF;">
+          <div style="margin-top:10px;padding:12px;background:var(--panel);border-radius:0;font-size:12px;line-height:1.8;color:var(--text);border:1px solid var(--border-c);">
             <b>前提:</b> Google アカウントで 2段階認証が有効になっていること<br>
             <br>
             <b>手順:</b><br>
-            1. <a href="https://myaccount.google.com/security" target="_blank" rel="noopener" style="color:#80FFEA;">myaccount.google.com/security</a> を開く<br>
+            1. <a href="https://myaccount.google.com/security" target="_blank" rel="noopener">myaccount.google.com/security</a> を開く<br>
             2. 「2段階認証プロセス」をクリック<br>
             3. 下にスクロールして「アプリパスワード」をクリック<br>
             4. アプリ名に「TW_Prophet」など任意の名前を入力して「作成」<br>
@@ -796,6 +828,22 @@ _HTML_TEMPLATE = r"""<!doctype html>
     let plotReqToken = 0;
     let partsReqToken = 0;
     let trainPolling = null;
+
+    /* ---- theme toggle ---- */
+    function applyTheme(theme){
+      document.body.classList.toggle('light', theme==='light');
+      const btn=document.getElementById('themeToggle');
+      if(btn) btn.innerHTML = theme==='light' ? '&#9728;' : '&#9789;';
+      localStorage.setItem('tw_theme', theme);
+    }
+    function toggleTheme(){
+      const cur = document.body.classList.contains('light') ? 'light' : 'dark';
+      applyTheme(cur==='light' ? 'dark' : 'light');
+    }
+    (function(){
+      const saved = localStorage.getItem('tw_theme');
+      if(saved) applyTheme(saved);
+    })();
 
     function setMsg(t){ document.getElementById('msg').textContent = t||''; }
     function setNotifyMsg(t){ document.getElementById('notifyMsg').textContent = t||''; }
