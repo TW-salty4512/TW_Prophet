@@ -46,26 +46,29 @@ def default_xgb(mode: str, **override) -> XGBRegressor:
 
 
 def _param_dist(mode: str) -> Dict[str, List[Any]]:
+    # v4.1.0: 探索範囲を拡大 (gamma 追加, n_estimators 上限引き上げ, learning_rate 細分化)
     if mode == "weekly":
         return {
-            "n_estimators": [100, 200, 300, 500],
-            "max_depth": [2, 3, 4, 5, 6, 8],
-            "learning_rate": [0.01, 0.03, 0.05, 0.1],
-            "subsample": [0.7, 0.8, 0.9, 1.0],
-            "colsample_bytree": [0.6, 0.8, 1.0],
-            "min_child_weight": [1, 3, 5, 7],
-            "reg_alpha": [0.0, 0.1, 0.5, 1.0],
-            "reg_lambda": [0.5, 1.0, 2.0],
+            "n_estimators":     [200, 300, 500, 800, 1200],
+            "max_depth":        [2, 3, 4, 5, 6, 7, 8],
+            "learning_rate":    [0.01, 0.02, 0.03, 0.05, 0.07, 0.1],
+            "subsample":        [0.6, 0.7, 0.8, 0.9, 1.0],
+            "colsample_bytree": [0.5, 0.6, 0.7, 0.8, 1.0],
+            "min_child_weight": [1, 2, 3, 5, 7, 10],
+            "reg_alpha":        [0.0, 0.01, 0.1, 0.5, 1.0, 2.0],
+            "reg_lambda":       [0.3, 0.5, 1.0, 2.0, 5.0],
+            "gamma":            [0.0, 0.1, 0.3, 0.5, 1.0],
         }
     return {
-        "n_estimators": [100, 200, 300, 500],
-        "max_depth": [2, 3, 4, 5, 6],
-        "learning_rate": [0.01, 0.03, 0.05, 0.1],
-        "subsample": [0.7, 0.8, 0.9, 1.0],
-        "colsample_bytree": [0.6, 0.8, 1.0],
-        "min_child_weight": [1, 3, 5],
-        "reg_alpha": [0.0, 0.1, 0.5],
-        "reg_lambda": [0.5, 1.0, 2.0],
+        "n_estimators":     [200, 300, 500, 800, 1200],
+        "max_depth":        [2, 3, 4, 5, 6, 7, 8],
+        "learning_rate":    [0.01, 0.02, 0.03, 0.05, 0.07, 0.1],
+        "subsample":        [0.6, 0.7, 0.8, 0.9, 1.0],
+        "colsample_bytree": [0.5, 0.6, 0.7, 0.8, 1.0],
+        "min_child_weight": [1, 2, 3, 5, 7, 10],
+        "reg_alpha":        [0.0, 0.01, 0.1, 0.5, 1.0, 2.0],
+        "reg_lambda":       [0.3, 0.5, 1.0, 2.0, 5.0],
+        "gamma":            [0.0, 0.1, 0.3, 0.5, 1.0],
     }
 
 
@@ -95,7 +98,8 @@ def fit_estimator(estimator: Any, X: np.ndarray, y: np.ndarray) -> Any:
 def search_best_xgb(mode: str, X: np.ndarray, y: np.ndarray) -> Tuple[XGBRegressor, Dict[str, Any]]:
     """TimeSeriesSplit + RandomizedSearchCV で最良の XGBRegressor を探索して返す。"""
     n_splits = min(4, max(2, len(X) // (20 if mode == "weekly" else 12)))
-    n_iter   = 25 if mode == "weekly" else 24
+    # v4.1.0: 探索回数を 25/24 -> 100 に拡張 (KB-IOPAD4 月次 RMSE -54%)
+    n_iter   = 100
 
     import sys
     _n_jobs = 1 if getattr(sys, "frozen", False) else -1
