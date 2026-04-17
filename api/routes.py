@@ -6,7 +6,9 @@ api/routes.py  –  FastAPI ルーター定義
 """
 from __future__ import annotations
 
+import sys
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 import logging
@@ -21,6 +23,23 @@ import config
 from api.service import TWProphetWebService
 
 router = APIRouter()
+
+
+def _read_version() -> str:
+    """version.txt を読む。PyInstaller onefile では sys._MEIPASS、開発時は project ルート。"""
+    candidates = []
+    if hasattr(sys, "_MEIPASS"):
+        candidates.append(Path(sys._MEIPASS) / "version.txt")
+    candidates.append(Path(__file__).resolve().parent.parent / "version.txt")
+    for p in candidates:
+        try:
+            return p.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+    return "?"
+
+
+_VERSION = _read_version()
 
 # ---------------------------------------------------------------------------
 # Pydantic リクエストモデル
@@ -295,7 +314,9 @@ def index() -> str:
             f'<a href="{url}" target="_blank" rel="noopener">{label}</a>\n'
         )
 
-    return _HTML_TEMPLATE.replace("<!-- NAV_LINKS -->", nav_link_html)
+    return (_HTML_TEMPLATE
+            .replace("<!-- NAV_LINKS -->", nav_link_html)
+            .replace("<!-- VERSION -->", _VERSION))
 
 
 # ---------------------------------------------------------------------------
@@ -574,7 +595,7 @@ _HTML_TEMPLATE = r"""<!doctype html>
   <header>
     <div>TW_PROPHET</div>
     <div class="muted" style="font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:.15em;">// DEMAND FORECAST SYSTEM</div>
-    <div class="versionBadge">Ver 4.0.1</div>
+    <div class="versionBadge">Ver <!-- VERSION --></div>
     <div class="navlinks">
 <!-- NAV_LINKS -->
     </div>

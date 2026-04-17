@@ -38,8 +38,9 @@ a = Analysis(
     pathex=[str(ROOT)],
     binaries=_collect_extra_dlls(),
     datas=[
-        (str(ROOT / 'examples'), 'examples'),
-        (str(ROOT / 'public'),   'public'),
+        (str(ROOT / 'examples'),    'examples'),
+        (str(ROOT / 'public'),      'public'),
+        (str(ROOT / 'version.txt'), '.'),
     ] + xgboost_datas,
     hiddenimports=[
         # uvicorn internals
