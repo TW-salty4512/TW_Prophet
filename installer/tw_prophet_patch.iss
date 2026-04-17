@@ -13,7 +13,7 @@
 
 ; AppVersion は /DAppVersion="x.x.x" で上書き可能
 #ifndef AppVersion
-  #define AppVersion "3.3.2"
+  #define AppVersion "4.1.0"
 #endif
 #define AppName          "TW_Prophet"
 #define AppPublisher     "TW-salty4512"
